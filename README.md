@@ -1,9 +1,11 @@
 # FirmwareGuard
 ### Open-Source Firmware Integrity & Anomaly Detection Framework
 
-![Version](https://img.shields.io/badge/version-0.1.0--MVP-blue)
+![Version](https://img.shields.io/badge/version-0.2.0--beta-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-Linux-lightgrey)
+![Security](https://img.shields.io/badge/security-hardened-brightgreen)
+![Audit](https://img.shields.io/badge/audit-47%20bugs%20fixed-success)
 
 FirmwareGuard is a **low-level, vendor-independent framework** for detecting and analyzing firmware-level telemetry on x86/x64 systems. It provides deep visibility into chipset telemetry mechanisms like Intel ME, AMD PSP, ACPI tables, and NIC firmware capabilities.
 
@@ -47,6 +49,49 @@ FirmwareGuard fills this gap.
 - Component-by-component analysis
 - Actionable mitigation recommendations
 
+### Phase 2 - Active Control & Security Hardening (Current Release)
+
+✅ **Security Hardening** (47 Vulnerabilities Fixed)
+- Eliminated command injection vulnerabilities
+- Comprehensive bounds checking and input validation
+- Thread-safe operations with proper locking
+- Memory safety with size limits and overflow protection
+- Hardened build with stack protection, FORTIFY_SOURCE, PIE, Full RELRO
+
+✅ **Safety Framework**
+- Automatic backup and restore system with checksums
+- Dry-run mode for safe testing
+- Rollback points for multi-step operations
+- User confirmation for critical changes
+- Operation logging and audit trail
+
+✅ **Intel ME Control**
+- HAP (High Assurance Platform) bit detection and manipulation
+- UEFI variable modification with automatic backup
+- ME region analysis and validation
+- Safe soft-disable mechanisms
+
+✅ **AMD PSP Mitigation**
+- Kernel parameter injection (`psp.psp_disabled=1`)
+- GRUB configuration management with safety checks
+- PSP service detection and enumeration
+
+✅ **Persistent Blocking**
+- Configuration file system (`/etc/firmwareguard/config.conf`)
+- Systemd service for boot-time enforcement
+- Automatic reapplication after firmware updates
+- Failsafe rollback on boot failure
+
+✅ **Enhanced NIC Control**
+- Persistent Wake-on-LAN disable
+- Intel AMT/vPro detection and mitigation
+- Configuration persistence across reboots
+
+✅ **Kernel Module** (Optional)
+- MMIO region tracking
+- DMA restriction capability
+- Kernel-level hardware access control
+
 ---
 
 ## 🧩 Architecture Overview
@@ -60,14 +105,37 @@ FirmwareGuard/
 │   │   ├── acpi.c         # ACPI table parsing
 │   │   ├── nic.c          # Network interface telemetry detection
 │   │   └── probe.c        # Orchestrator for all probes
-│   ├── block/
-│   │   └── blocker.c      # Non-destructive blocking recommendations
+│   ├── block/             # Blocking implementations
+│   │   ├── blocker.c      # Phase 1 blocking recommendations
+│   │   └── blocker_v2.h   # Phase 2 active blocking interface
 │   ├── audit/
 │   │   └── reporter.c     # Report generation (JSON/text)
+│   ├── safety/            # Phase 2: Safety framework
+│   │   ├── safety.c       # Backup, restore, rollback
+│   │   └── safety.h       # Safety context and operations
+│   ├── config/            # Phase 2: Configuration management
+│   │   ├── config.c       # Config file parsing and state
+│   │   └── config.h       # Configuration structures
+│   ├── uefi/              # Phase 2: UEFI variable manipulation
+│   │   ├── uefi_vars.c    # UEFI variable read/write
+│   │   └── uefi_vars.h    # UEFI structures
+│   ├── grub/              # Phase 2: GRUB configuration
+│   │   ├── grub_config.c  # GRUB config management
+│   │   └── grub_config.h  # GRUB structures
 │   └── main.c             # CLI interface
+├── kernel/                # Phase 2: Kernel module (optional)
+│   ├── fwguard_km.c       # MMIO/DMA protection module
+│   ├── fwguard_km.h       # Module headers
+│   └── Makefile           # Kernel build system
+├── systemd/               # Phase 2: System integration
+│   └── firmwareguard.service  # Boot-time service
+├── docs/                  # Documentation
+│   ├── PHASE2.md          # Phase 2 user guide
+│   ├── SECURITY.md        # Security analysis
+│   └── ...                # Additional guides
 ├── include/
 │   └── firmwareguard.h    # Common headers and definitions
-├── Makefile               # Build system
+├── Makefile               # Build system (with security hardening)
 └── README.md              # This file
 ```
 
@@ -85,18 +153,33 @@ FirmwareGuard/
 ### Build from Source
 
 ```bash
-# Clone the repository (if distributed via git)
-cd /home/zero/FirmwareGuard
+# Clone the repository
+git clone https://github.com/KKingZero/FirmwareGuard.git
+cd FirmwareGuard
 
-# Build
+# Build userspace binary (with security hardening)
 make
+
+# Build kernel module (optional - for MMIO/DMA protection)
+make kernel
 
 # Test
 ./firmwareguard --help
 
 # Install system-wide (optional)
 sudo make install
+
+# Install systemd service (optional - for boot-time enforcement)
+sudo cp systemd/firmwareguard.service /etc/systemd/system/
+sudo systemctl daemon-reload
 ```
+
+**Note**: Phase 2 build includes security hardening flags:
+- Stack protection (`-fstack-protector-strong`)
+- Buffer overflow detection (`-D_FORTIFY_SOURCE=2`)
+- Position independent executable (`-fPIE -pie`)
+- Full RELRO (`-Wl,-z,relro,-z,now`)
+- Non-executable stack (`-Wl,-z,noexecstack`)
 
 ### Kernel Module Requirements
 
