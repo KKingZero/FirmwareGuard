@@ -1,0 +1,27 @@
+# Build artifacts
+build/
+firmwareguard
+*.o
+*.a
+*.so
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Reports and logs
+*.json
+*.log
+audit-*.txt
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Debug files
+*.gdb
+core
+vgcore.*
