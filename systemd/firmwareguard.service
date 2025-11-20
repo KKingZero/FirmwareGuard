@@ -1,0 +1,29 @@
+[Unit]
+Description=FirmwareGuard Firmware Telemetry Protection Service
+Documentation=https://github.com/KKingZero/FirmwareGuard
+After=network.target systemd-modules-load.service
+Before=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/sbin/modprobe msr
+ExecStartPre=-/sbin/insmod /lib/modules/%k/extra/fwguard_km.ko
+ExecStart=/usr/local/bin/firmwareguard apply --config /etc/firmwareguard/config.conf
+ExecReload=/usr/local/bin/firmwareguard apply --config /etc/firmwareguard/config.conf
+ExecStop=/usr/local/bin/firmwareguard restore
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=firmwareguard
+
+# Security hardening
+ProtectSystem=full
+ProtectHome=yes
+NoNewPrivileges=false
+PrivateTmp=yes
+
+# Required for hardware access
+AmbientCapabilities=CAP_SYS_RAWIO CAP_SYS_ADMIN CAP_DAC_OVERRIDE
+
+[Install]
+WantedBy=multi-user.target
