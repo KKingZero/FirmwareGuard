@@ -1,11 +1,11 @@
 # FirmwareGuard
 ### Open-Source Firmware Integrity & Anomaly Detection Framework
 
-![Version](https://img.shields.io/badge/version-0.2.0--beta-blue)
+![Version](https://img.shields.io/badge/version-0.3.0--alpha-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-Linux-lightgrey)
 ![Security](https://img.shields.io/badge/security-hardened-brightgreen)
-![Audit](https://img.shields.io/badge/audit-47%20bugs%20fixed-success)
+![Phase](https://img.shields.io/badge/phase-3%20foundation-success)
 
 FirmwareGuard is a **low-level, vendor-independent framework** for detecting and analyzing firmware-level telemetry on x86/x64 systems. It provides deep visibility into chipset telemetry mechanisms like Intel ME, AMD PSP, ACPI tables, and NIC firmware capabilities.
 
@@ -29,68 +29,36 @@ FirmwareGuard fills this gap.
 
 ## ⚙️ Core Features
 
-### Phase 1 - MVP (Current Release)
+### ✅ Hardware Probe & Audit
+- **CPU & Chipset Analysis**: Detects Intel ME, AMD PSP, and associated firmware versions.
+- **ACPI Table Parsing**: Analyzes tables like FPDT, TPM2, DMAR, and IVRS for telemetry indicators.
+- **NIC Firmware Capabilities**: Identifies Wake-on-LAN, Intel AMT, and remote stats reporting.
+- **Risk Assessment**: Classifies system risk (LOW to CRITICAL) based on detected components.
+- **Audit Reports**: Generates JSON and human-readable reports with actionable recommendations.
 
-✅ **Hardware Probe Module**
-- CPU vendor detection (Intel/AMD)
-- Intel Management Engine (ME) detection and version identification
-- AMD Platform Security Processor (PSP) detection
-- ACPI table parsing for telemetry-related tables (FPDT, TPM2, DMAR, IVRS)
-- NIC firmware capability detection (Wake-on-LAN, AMT, stats reporting)
+### ✅ Active Hardening & Blocking
+- **Intel ME Control**: Disables ME via HAP bit manipulation in UEFI variables, with analysis and validation.
+- **AMD PSP Mitigation**: Neutralizes PSP activity by injecting kernel parameters through GRUB configuration.
+- **Persistent Blocking**: Enforces configurations at boot time using a systemd service.
+- **Enhanced NIC Control**: Persistently disables Wake-on-LAN and mitigates Intel AMT/vPro.
 
-✅ **Non-Destructive Blocking**
-- Risk assessment for detected components
-- Blocking recommendations for Intel ME, AMD PSP, and NIC telemetry
-- Safe, read-only analysis (MVP does not modify firmware)
+### ✅ Safety & Reliability
+- **Security Hardened**: Built with stack protection, PIE, RELRO, and `_FORTIFY_SOURCE` to prevent exploitation.
+- **Safety Framework**: Includes a dry-run mode, automatic backups with checksums, and rollback points for safe testing.
+- **User Confirmation**: Requires explicit user approval for critical, potentially destructive operations.
+- **Failsafe Rollback**: Integrates with the bootloader to revert changes in case of boot failure.
 
-✅ **Audit Report Generation**
-- JSON and human-readable text output
-- Risk level classification (NONE, LOW, MEDIUM, HIGH, CRITICAL)
-- Component-by-component analysis
-- Actionable mitigation recommendations
+### ✅ Extensible Architecture
+- **Kernel Module (Optional)**: Provides a mechanism for kernel-level MMIO region tracking and DMA restriction.
+- **Configuration System**: Manages settings and state via a clear configuration file (`/etc/firmwareguard/config.conf`).
 
-### Phase 2 - Active Control & Security Hardening (Current Release)
-
-✅ **Security Hardening** (47 Vulnerabilities Fixed)
-- Eliminated command injection vulnerabilities
-- Comprehensive bounds checking and input validation
-- Thread-safe operations with proper locking
-- Memory safety with size limits and overflow protection
-- Hardened build with stack protection, FORTIFY_SOURCE, PIE, Full RELRO
-
-✅ **Safety Framework**
-- Automatic backup and restore system with checksums
-- Dry-run mode for safe testing
-- Rollback points for multi-step operations
-- User confirmation for critical changes
-- Operation logging and audit trail
-
-✅ **Intel ME Control**
-- HAP (High Assurance Platform) bit detection and manipulation
-- UEFI variable modification with automatic backup
-- ME region analysis and validation
-- Safe soft-disable mechanisms
-
-✅ **AMD PSP Mitigation**
-- Kernel parameter injection (`psp.psp_disabled=1`)
-- GRUB configuration management with safety checks
-- PSP service detection and enumeration
-
-✅ **Persistent Blocking**
-- Configuration file system (`/etc/firmwareguard/config.conf`)
-- Systemd service for boot-time enforcement
-- Automatic reapplication after firmware updates
-- Failsafe rollback on boot failure
-
-✅ **Enhanced NIC Control**
-- Persistent Wake-on-LAN disable
-- Intel AMT/vPro detection and mitigation
-- Configuration persistence across reboots
-
-✅ **Kernel Module** (Optional)
-- MMIO region tracking
-- DMA restriction capability
-- Kernel-level hardware access control
+### ✅ Enhanced Security & CI/CD (Phase 3 - NEW!)
+- **Lightweight Agent**: CLI-based daemon for scheduled scanning and offline audit caching.
+- **CI/CD Integration**: GitHub Actions workflows for automated hardware validation and compliance checking.
+- **Secure Boot Detection**: Pre-flight checks prevent UEFI modification failures on Secure Boot systems.
+- **HAP Platform Validation**: CPU generation detection prevents Intel ME disable attempts on unsupported hardware.
+- **HAP Platform Validation**: CPU generation detection prevents system bricking on unsupported platforms.
+- **Enhanced GRUB Safety**: Comprehensive dry-run validation and timestamped backups.
 
 ---
 
@@ -263,7 +231,35 @@ ACTIONS:
                    - WARNING: Disabling ME may cause system instability
 ```
 
-### 3. JSON Output for Automation
+### 3. Apply Persistent Blocking
+
+To apply the recommended blocking actions persistently (e.g., disable Intel ME HAP bit, set PSP kernel parameters):
+
+```bash
+sudo ./firmwareguard apply --persistent
+```
+
+**Output:**
+```
+========================================
+  APPLYING FIRMWAREGUARD CONFIGURATION
+========================================
+
+Actions to Apply: 2
+Successful: 2
+
+[1] Intel Management Engine
+    Status:   SUCCESS
+    Method:   HAP bit set via UEFI variable
+    Details:  Intel ME successfully soft-disabled. Reboot required.
+
+[2] AMD PSP Mitigation
+    Status:   SUCCESS
+    Method:   Kernel parameter 'psp.psp_disabled=1' added to GRUB
+    Details:  AMD PSP mitigation configured. Reboot required.
+```
+
+### 4. JSON Output for Automation
 
 ```bash
 sudo ./firmwareguard scan --json -o report.json
@@ -362,21 +358,19 @@ FirmwareGuard requires **root** for:
 - `/sys/firmware/acpi/tables/` (ACPI parsing)
 - PCI configuration space (I/O ports 0xCF8/0xCFC)
 
-### Safety Guarantees (MVP)
+### Safety Guarantees
 
-The current MVP release is **read-only**:
-- ✅ No firmware modifications
-- ✅ No MSR writes
-- ✅ No PCI config writes
-- ✅ No UEFI variable changes
+FirmwareGuard now incorporates a comprehensive **safety framework** to protect against system instability and bricking:
+- ✅ **Automatic Backup & Restore**: Critical modifications are preceded by backups with checksums.
+- ✅ **Dry-Run Mode**: All destructive operations can be simulated without making actual changes.
+- ✅ **Rollback Capability**: Changes can be reverted to previous states using defined rollback points.
+- ✅ **User Confirmation**: Explicit user approval is required for all critical and potentially destructive actions.
+- ✅ **Failsafe Mechanisms**: Integration with GRUB for boot failure recovery and automatic reapplication prevention.
 
-**Exception:** Wake-on-LAN disable uses `ethtool` (reversible, non-persistent).
+### Future Phases
 
-### Future Phases (Planned)
-
-- **Phase 2:** Kernel module for DMA restriction
-- **Phase 3:** UEFI variable patching (with user confirmation)
-- **Phase 4:** me_cleaner integration
+- **Phase 3:** Enterprise & Fleet Management, advanced detection (see ROADMAP.md for details)
+- **Phase 4:** Research & Innovation
 
 ---
 
@@ -422,22 +416,33 @@ sudo ./firmwareguard block --json | jq -r '.actions[] | select(.successful==true
 
 ## 🗺️ Roadmap
 
-### Phase 1 - MVP ✅ (Current)
+### Phase 1 - MVP ✅ (Complete)
 - [x] Hardware probe module
 - [x] Non-destructive blocking recommendations
 - [x] Audit report generation
 
-### Phase 2 - Deep Control (Planned)
-- [ ] Kernel module for MMIO write protection
-- [ ] DMA window restriction
-- [ ] UEFI variable modification (HAP bit)
-- [ ] Persistent configuration
+### Phase 2 - Deep Control ✅ (Complete)
+- [x] Kernel module for MMIO write protection
+- [x] DMA window restriction
+- [x] UEFI variable modification (HAP bit)
+- [x] Persistent configuration
+- [x] All Phase 2 known limitations fixed
 
-### Phase 3 - Enterprise (Planned)
-- [ ] Fleet management dashboard
-- [ ] CI/CD integration
-- [ ] Automated remediation
-- [ ] Windows support
+### Phase 3 - Bug Fixes & CI/CD ✅ (Complete)
+- [x] Secure Boot detection and warnings
+- [x] HAP platform support validation
+- [x] Enhanced GRUB backup and dry-run
+- [x] Kernel module conflict detection
+- [x] Agent architecture (CLI-based daemon, caching, scheduling)
+- [x] GitHub Actions CI/CD integration
+- [x] All known limitations from Phase 2 resolved
+
+**Note:** Web-based management features are not planned. FirmwareGuard remains a CLI security tool.
+
+### Phase 4 - Research & Innovation (Planned)
+- [ ] AI-powered anomaly detection in firmware behavior
+- [ ] Automated firmware binary analysis
+- [ ] Supply chain integrity verification
 
 ---
 

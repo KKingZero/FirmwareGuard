@@ -3,6 +3,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <errno.h>
+#include <dirent.h>
 
 int grub_init(grub_config_t *config) {
     struct stat st;
@@ -95,6 +96,9 @@ int grub_backup_config(safety_context_t *safety_ctx) {
     void *data;
     size_t size;
     int ret;
+    char timestamp_backup[512];
+    time_t now;
+    struct tm *tm_info;
 
     if (!safety_ctx) {
         return FG_ERROR;
@@ -103,6 +107,29 @@ int grub_backup_config(safety_context_t *safety_ctx) {
     if (safety_is_dry_run(safety_ctx)) {
         FG_INFO("[DRY-RUN] Would backup GRUB configuration");
         return FG_SUCCESS;
+    }
+
+    /* PHASE 3: Create timestamped backup in addition to safety backup
+     * This provides additional protection for GRUB configs
+     */
+    now = time(NULL);
+    struct tm tm_buf;
+    tm_info = localtime_r(&now, &tm_buf);
+    if (tm_info) {
+        char timestamp_str[32];
+        strftime(timestamp_str, sizeof(timestamp_str), "%Y%m%d_%H%M%S", tm_info);
+        snprintf(timestamp_backup, sizeof(timestamp_backup),
+                 "/etc/default/grub.bak.%s", timestamp_str);
+
+        /* Create timestamped backup copy */
+        char cp_cmd[1024];
+        snprintf(cp_cmd, sizeof(cp_cmd), "cp -a %s %s",
+                 GRUB_DEFAULT_FILE, timestamp_backup);
+        if (system(cp_cmd) == 0) {
+            FG_INFO("Created timestamped GRUB backup: %s", timestamp_backup);
+        } else {
+            FG_WARN("Failed to create timestamped backup (continuing anyway)");
+        }
     }
 
     /* Read entire GRUB config file */
@@ -441,4 +468,141 @@ bool grub_verify_config(const grub_config_t *config) {
     }
 
     return true;
+}
+
+/* PHASE 3: Enhanced dry-run validation */
+
+int grub_dry_run_validate(const grub_config_t *config) {
+    bool valid = true;
+    struct stat st;
+
+    if (!config) {
+        return FG_ERROR;
+    }
+
+    FG_INFO("=== GRUB Configuration Dry-Run Validation ===");
+
+    /* Check GRUB config file exists */
+    if (stat(config->grub_file, &st) != 0) {
+        FG_LOG_ERROR("GRUB config file not found: %s", config->grub_file);
+        valid = false;
+    } else {
+        FG_INFO("  GRUB config file: %s [OK]", config->grub_file);
+    }
+
+    /* Validate cmdline syntax */
+    if (!grub_verify_config(config)) {
+        FG_LOG_ERROR("GRUB config validation failed (dangerous content)");
+        valid = false;
+    } else {
+        FG_INFO("  Cmdline validation: [OK]");
+    }
+
+    /* Check cmdline length */
+    size_t cmdline_len = strlen(config->cmdline_linux_default);
+    if (cmdline_len > 512) {
+        FG_WARN("  Cmdline length: %zu bytes (may be too long for some systems)", cmdline_len);
+    } else {
+        FG_INFO("  Cmdline length: %zu bytes [OK]", cmdline_len);
+    }
+
+    /* Check for conflicting parameters */
+    if (grub_has_kernel_param(config, "psp.psp_disabled=1") &&
+        grub_has_kernel_param(config, "psp.psp_enabled=1")) {
+        FG_WARN("  Conflicting PSP parameters detected");
+        valid = false;
+    }
+
+    /* Check GRUB update command availability */
+    if (stat("/usr/sbin/update-grub", &st) != 0 &&
+        stat("/usr/sbin/grub2-mkconfig", &st) != 0) {
+        FG_WARN("  GRUB update command not found - changes won't be applied to bootloader");
+    } else {
+        FG_INFO("  GRUB update command: [AVAILABLE]");
+    }
+
+    /* Check /boot partition is writable */
+    if (access("/boot", W_OK) != 0) {
+        FG_WARN("  /boot partition is not writable");
+        valid = false;
+    } else {
+        FG_INFO("  /boot writable: [OK]");
+    }
+
+    /* Simulate the change that would be made */
+    FG_INFO("  Current cmdline: %s",
+            strlen(config->cmdline_current) > 0 ?
+            config->cmdline_current : "[none]");
+    FG_INFO("  New cmdline: %s", config->cmdline_linux_default);
+
+    if (valid) {
+        FG_INFO("=== Dry-run validation PASSED ===");
+        return FG_SUCCESS;
+    } else {
+        FG_LOG_ERROR("=== Dry-run validation FAILED ===");
+        return FG_ERROR;
+    }
+}
+
+int grub_list_backups(FILE *output) {
+    DIR *dir;
+    struct dirent *entry;
+    int count = 0;
+    struct stat st;
+    char full_path[512];
+
+    if (!output) {
+        return FG_ERROR;
+    }
+
+    fprintf(output, "\n");
+    fprintf(output, "========================================\n");
+    fprintf(output, "  GRUB CONFIGURATION BACKUPS\n");
+    fprintf(output, "========================================\n");
+    fprintf(output, "\n");
+
+    /* List timestamped backups in /etc/default/ */
+    dir = opendir("/etc/default");
+    if (!dir) {
+        fprintf(output, "Cannot access /etc/default\n");
+        return FG_ERROR;
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        /* Look for grub.bak.* files */
+        if (strncmp(entry->d_name, "grub.bak.", 9) == 0) {
+            snprintf(full_path, sizeof(full_path), "/etc/default/%s", entry->d_name);
+
+            if (stat(full_path, &st) == 0) {
+                char time_str[64];
+                struct tm *tm_info;
+                struct tm tm_buf;
+                tm_info = localtime_r(&st.st_mtime, &tm_buf);
+                if (tm_info) {
+                    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", tm_info);
+                } else {
+                    strcpy(time_str, "unknown");
+                }
+
+                fprintf(output, "[%d] %s\n", count + 1, entry->d_name);
+                fprintf(output, "    Path:     %s\n", full_path);
+                fprintf(output, "    Size:     %ld bytes\n", (long)st.st_size);
+                fprintf(output, "    Modified: %s\n", time_str);
+                fprintf(output, "\n");
+                count++;
+            }
+        }
+    }
+
+    closedir(dir);
+
+    if (count == 0) {
+        fprintf(output, "No GRUB backups found.\n");
+        fprintf(output, "Backups are created automatically when modifying GRUB config.\n");
+    } else {
+        fprintf(output, "Total: %d backup(s) found\n", count);
+    }
+
+    fprintf(output, "\n");
+    return FG_SUCCESS;
 }

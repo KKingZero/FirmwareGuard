@@ -28,56 +28,56 @@ Build the industry-standard open-source framework for firmware-level privacy har
 
 ---
 
-## 🚧 Phase 2: Active Control & Deep Blocking (IN PLANNING)
+## ✅ Phase 2: Active Control & Deep Blocking (COMPLETE)
 **Timeline:** Weeks 7-18 (3 months) | **Target:** Q2 2025
 
 ### Core Features
 
 #### 2.1 Kernel Module Development
-- [ ] Loadable kernel module for privileged operations
-- [ ] MMIO write protection layer
-- [ ] DMA window restriction engine
-- [ ] Memory-mapped register filtering
-- [ ] Safe rollback mechanism
+- [x] Loadable kernel module for privileged operations
+- [x] MMIO write protection layer
+- [x] DMA window restriction engine
+- [x] Memory-mapped register filtering
+- [x] Safe rollback mechanism
 
 #### 2.2 Intel ME Soft-Disable
-- [ ] HAP/AltMeDisable bit manipulation
-- [ ] UEFI variable modification (with backup)
-- [ ] me_cleaner integration (optional)
-- [ ] ME region analysis and validation
-- [ ] Automatic HAP bit detection
+- [x] HAP/AltMeDisable bit manipulation
+- [x] UEFI variable modification (with backup)
+- [x] me_cleaner integration (optional)
+- [x] ME region analysis and validation
+- [x] Automatic HAP bit detection
 
 #### 2.3 AMD PSP Mitigation
-- [ ] Kernel parameter injection (psp.psp_disabled=1)
-- [ ] GRUB configuration management
-- [ ] fTPM disable options (ASUS/MSI boards)
-- [ ] PSP service enumeration
-- [ ] Selective PSP module blocking
+- [x] Kernel parameter injection (psp.psp_disabled=1)
+- [x] GRUB configuration management
+- [x] fTPM disable options (ASUS/MSI boards)
+- [x] PSP service enumeration
+- [x] Selective PSP module blocking
 
 #### 2.4 Persistent Blocking
-- [ ] Configuration file system (/etc/firmwareguard/config.yaml)
-- [ ] Systemd service for boot-time enforcement
-- [ ] Automatic reapplication after firmware updates
-- [ ] Rollback on boot failure (failsafe mode)
+- [x] Configuration file system (/etc/firmwareguard/config.yaml)
+- [x] Systemd service for boot-time enforcement
+- [x] Automatic reapplication after firmware updates
+- [x] Rollback on boot failure (failsafe mode)
 
 #### 2.5 Enhanced NIC Control
-- [ ] Persistent Wake-on-LAN disable
-- [ ] Intel AMT/vPro complete disable
-- [ ] NIC firmware downgrade detection
-- [ ] Network stack isolation options
+- [x] Persistent Wake-on-LAN disable
+- [x] Intel AMT/vPro complete disable
+- [x] NIC firmware downgrade detection
+- [x] Network stack isolation options
 
 ### Safety Mechanisms
-- [ ] Pre-modification firmware backup
-- [ ] Dry-run mode for all destructive operations
-- [ ] Automatic restore on system instability
-- [ ] User confirmation for CRITICAL changes
-- [ ] Boot failure recovery (GRUB integration)
+- [x] Pre-modification firmware backup
+- [x] Dry-run mode for all destructive operations
+- [x] Automatic restore on system instability
+- [x] User confirmation for CRITICAL changes
+- [x] Boot failure recovery (GRUB integration)
 
 ### Documentation
-- [ ] Kernel module development guide
-- [ ] Safe ME disable procedures
-- [ ] Recovery playbooks
-- [ ] Platform compatibility matrix
+- [x] Kernel module development guide
+- [x] Safe ME disable procedures
+- [x] Recovery playbooks
+- [x] Platform compatibility matrix
 
 ---
 
@@ -281,7 +281,7 @@ Build the industry-standard open-source framework for firmware-level privacy har
 
 **Roadmap Version:** 1.0
 **Last Updated:** 2025-11-19
-**Status:** Phase 1 Complete → Phase 2 Planning
+**Status:** Phase 2 Complete → Phase 3 Planning
 
 ---
 

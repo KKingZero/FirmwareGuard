@@ -181,13 +181,28 @@ static const struct file_operations fwguard_fops = {
 static int __init fwguard_init(void)
 {
     int ret;
+    struct file *test_fp;
 
     pr_info("fwguard: initializing kernel module v%s\n", FWGUARD_KM_VERSION);
+
+    /* PHASE 3: Symbol conflict detection
+     * Check if /dev/fwguard already exists from another module
+     * This prevents conflicts with other security modules
+     */
+    test_fp = filp_open("/dev/fwguard", O_RDONLY, 0);
+    if (!IS_ERR(test_fp)) {
+        filp_close(test_fp, NULL);
+        pr_err("fwguard: CONFLICT - /dev/fwguard already exists\n");
+        pr_err("fwguard: Another fwguard instance or conflicting module is loaded\n");
+        pr_err("fwguard: Run 'lsmod | grep fwguard' to check for duplicates\n");
+        return -EEXIST;
+    }
 
     /* Allocate device number */
     ret = alloc_chrdev_region(&fwguard_dev, 0, 1, "fwguard");
     if (ret < 0) {
-        pr_err("fwguard: failed to allocate device number\n");
+        pr_err("fwguard: failed to allocate device number (error: %d)\n", ret);
+        pr_err("fwguard: This may indicate a symbol conflict with another module\n");
         return ret;
     }
 

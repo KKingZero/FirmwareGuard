@@ -85,6 +85,15 @@ int uefi_set_me_hap_bit(safety_context_t *safety_ctx, bool enable);
 /* Check if Intel ME HAP is available */
 bool uefi_is_me_hap_available(void);
 
+/* Secure Boot detection - PHASE 3 */
+bool uefi_is_secure_boot_enabled(void);
+
+/* Get Secure Boot state with detailed info */
+int uefi_get_secure_boot_state(bool *enabled, bool *setup_mode);
+
+/* Check if UEFI variable modification will work with Secure Boot */
+bool uefi_can_modify_vars_with_secureboot(void);
+
 /* Free UEFI variable data */
 void uefi_free_variable(uefi_variable_t *var);
 

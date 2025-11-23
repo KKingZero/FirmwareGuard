@@ -63,4 +63,10 @@ int grub_restore_config(safety_context_t *safety_ctx);
 /* Verify GRUB configuration syntax */
 bool grub_verify_config(const grub_config_t *config);
 
+/* PHASE 3: Enhanced dry-run validation */
+int grub_dry_run_validate(const grub_config_t *config);
+
+/* List all GRUB backups */
+int grub_list_backups(FILE *output);
+
 #endif /* FG_GRUB_CONFIG_H */

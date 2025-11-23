@@ -5,6 +5,14 @@ firmwareguard
 *.a
 *.so
 
+# Kernel module build artifacts
+*.ko
+*.mod
+*.mod.c
+.*.cmd
+Module.symvers
+modules.order
+
 # Editor files
 *.swp
 *.swo

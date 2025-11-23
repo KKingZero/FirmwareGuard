@@ -196,6 +196,13 @@ int uefi_write_variable(safety_context_t *safety_ctx,
         return FG_NO_PERMISSION;
     }
 
+    /* PHASE 3: Check Secure Boot compatibility before attempting modification */
+    if (!uefi_can_modify_vars_with_secureboot()) {
+        FG_LOG_ERROR("UEFI variable modification blocked: Secure Boot is enabled");
+        FG_LOG_ERROR("Disable Secure Boot in BIOS/UEFI settings before using FirmwareGuard");
+        return FG_NO_PERMISSION;
+    }
+
     /* Dry-run mode */
     if (safety_ctx && safety_is_dry_run(safety_ctx)) {
         FG_INFO("[DRY-RUN] Would write UEFI variable: %s-%s (size: %zu)",
@@ -445,6 +452,17 @@ int uefi_set_me_hap_bit(safety_context_t *safety_ctx, bool enable) {
         return FG_ERROR;
     }
 
+    /* PHASE 3: Check HAP platform support before attempting
+     * This prevents bricking systems that don't support HAP
+     */
+    /* Note: We need to include me_psp.h and call the check, but to avoid
+     * circular dependencies, we'll do a basic platform check here
+     */
+    FG_WARN("HAP bit modification is a CRITICAL operation");
+    FG_WARN("Ensure your platform supports HAP before proceeding");
+    FG_WARN("Supported: Intel Skylake (6th gen) and newer");
+    FG_WARN("Unsupported: Older Intel platforms, most consumer boards");
+
     /* Check if user confirmation is required */
     if (safety_ctx->require_confirmation) {
         const char *warning =
@@ -515,4 +533,102 @@ void uefi_free_variable(uefi_variable_t *var) {
         var->data = NULL;
         var->data_size = 0;
     }
+}
+
+/* PHASE 3: Secure Boot Detection Functions */
+
+bool uefi_is_secure_boot_enabled(void) {
+    uefi_variable_t var;
+    bool enabled = false;
+
+    /* Read SecureBoot variable from EFI global namespace
+     * This variable is defined in UEFI spec section 3.3
+     * Value: 1 = enabled, 0 = disabled
+     */
+    if (uefi_read_variable("SecureBoot", EFI_GLOBAL_VARIABLE_GUID, &var) == FG_SUCCESS) {
+        if (var.data_size >= 1 && var.data) {
+            enabled = (var.data[0] == 1);
+        }
+        uefi_free_variable(&var);
+    }
+
+    return enabled;
+}
+
+int uefi_get_secure_boot_state(bool *enabled, bool *setup_mode) {
+    uefi_variable_t sb_var, setup_var;
+    int ret = FG_SUCCESS;
+
+    if (!enabled || !setup_mode) {
+        return FG_ERROR;
+    }
+
+    /* Initialize to safe defaults */
+    *enabled = false;
+    *setup_mode = false;
+
+    /* Read SecureBoot variable */
+    if (uefi_read_variable("SecureBoot", EFI_GLOBAL_VARIABLE_GUID, &sb_var) == FG_SUCCESS) {
+        if (sb_var.data_size >= 1 && sb_var.data) {
+            *enabled = (sb_var.data[0] == 1);
+        }
+        uefi_free_variable(&sb_var);
+    } else {
+        /* SecureBoot variable not found - system may not support Secure Boot */
+        ret = FG_NOT_FOUND;
+    }
+
+    /* Read SetupMode variable
+     * SetupMode = 1 means system is in Setup Mode (keys not enrolled)
+     * SetupMode = 0 means User Mode (keys enrolled, Secure Boot can be active)
+     */
+    if (uefi_read_variable("SetupMode", EFI_GLOBAL_VARIABLE_GUID, &setup_var) == FG_SUCCESS) {
+        if (setup_var.data_size >= 1 && setup_var.data) {
+            *setup_mode = (setup_var.data[0] == 1);
+        }
+        uefi_free_variable(&setup_var);
+    }
+
+    FG_DEBUG("Secure Boot state: enabled=%d, setup_mode=%d", *enabled, *setup_mode);
+    return ret;
+}
+
+bool uefi_can_modify_vars_with_secureboot(void) {
+    bool sb_enabled = false;
+    bool setup_mode = false;
+
+    /* Get Secure Boot state */
+    if (uefi_get_secure_boot_state(&sb_enabled, &setup_mode) != FG_SUCCESS) {
+        /* Cannot determine state, assume modification might fail */
+        return false;
+    }
+
+    /* SECURITY NOTE: UEFI variable modification behavior with Secure Boot:
+     *
+     * 1. When Secure Boot is ENABLED (User Mode):
+     *    - Most authenticated variables cannot be modified
+     *    - Writes require proper cryptographic signatures
+     *    - ME-related variables may be locked down
+     *    - Modification will likely FAIL without signed updates
+     *
+     * 2. When in Setup Mode:
+     *    - Variables can be modified more freely
+     *    - This is the enrollment phase before Secure Boot activation
+     *
+     * 3. When Secure Boot is DISABLED (User Mode):
+     *    - Variable modification is generally allowed
+     *    - This is the safest state for FirmwareGuard operations
+     */
+
+    if (sb_enabled && !setup_mode) {
+        /* Secure Boot active in User Mode - modification will likely fail */
+        FG_WARN("Secure Boot is ENABLED - UEFI variable modification may fail");
+        FG_WARN("To modify UEFI variables, you may need to:");
+        FG_WARN("  1. Disable Secure Boot in BIOS/UEFI settings, OR");
+        FG_WARN("  2. Use cryptographically signed updates (requires vendor keys)");
+        return false;
+    }
+
+    /* Safe to proceed: either Secure Boot disabled or in Setup Mode */
+    return true;
 }

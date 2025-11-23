@@ -1,0 +1,187 @@
+# PHASE 3: Hardware Validation Workflow
+# This GitHub Action validates firmware security on self-hosted runners
+# before deploying to production
+
+name: Hardware Security Validation
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run weekly on Sunday at 2 AM
+    - cron: '0 2 * * 0'
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'kernel/**'
+
+jobs:
+  firmware-scan:
+    name: Firmware Security Scan
+    runs-on: self-hosted
+    # IMPORTANT: This must run on self-hosted runners with root access
+    # GitHub-hosted runners cannot access hardware
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential linux-headers-$(uname -r) ethtool
+
+      - name: Build FirmwareGuard
+        run: |
+          make clean
+          make
+
+      - name: Load MSR module
+        run: |
+          sudo modprobe msr || echo "MSR module already loaded"
+
+      - name: Run firmware scan
+        id: scan
+        run: |
+          sudo ./firmwareguard scan --json -o scan-results.json
+          echo "Scan completed"
+
+      - name: Upload scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-scan-results
+          path: scan-results.json
+          retention-days: 30
+
+      - name: Parse risk level
+        id: risk
+        run: |
+          RISK=$(jq -r '.overall_risk' scan-results.json)
+          echo "risk_level=$RISK" >> $GITHUB_OUTPUT
+          echo "Overall risk: $RISK"
+
+      - name: Check risk threshold
+        run: |
+          RISK="${{ steps.risk.outputs.risk_level }}"
+          if [ "$RISK" = "CRITICAL" ]; then
+            echo "::error::CRITICAL risk level detected - blocking deployment"
+            exit 1
+          elif [ "$RISK" = "HIGH" ]; then
+            echo "::warning::HIGH risk level detected - review required"
+          fi
+
+      - name: Comment on PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const results = JSON.parse(fs.readFileSync('scan-results.json', 'utf8'));
+
+            const body = `## Firmware Security Scan Results
+
+            - **Overall Risk**: ${results.overall_risk}
+            - **Components Found**: ${results.num_components}
+            - **Scan Time**: ${new Date(results.timestamp * 1000).toISOString()}
+
+            ### Detected Components:
+            ${results.components.map(c =>
+              `- **${c.name}** (${c.type}): Risk ${c.risk}, Blockable: ${c.blockable ? 'Yes' : 'No'}`
+            ).join('\n')}
+
+            ${results.overall_risk === 'CRITICAL' || results.overall_risk === 'HIGH' ?
+              '⚠️ **Action Required**: Review firmware security findings before deployment.' :
+              '✅ Firmware security scan passed.'}
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  compliance-check:
+    name: Compliance Validation
+    runs-on: self-hosted
+    needs: firmware-scan
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download scan results
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-scan-results
+
+      - name: Check Intel ME status
+        run: |
+          ME_ACTIVE=$(jq -r '.components[] | select(.type=="Intel ME") | .active' scan-results.json)
+          if [ "$ME_ACTIVE" = "true" ]; then
+            echo "::warning::Intel ME is active - may violate security policy"
+          fi
+
+      - name: Check AMD PSP status
+        run: |
+          PSP_ACTIVE=$(jq -r '.components[] | select(.type=="AMD PSP") | .active' scan-results.json)
+          if [ "$PSP_ACTIVE" = "true" ]; then
+            echo "::warning::AMD PSP is active - may violate security policy"
+          fi
+
+      - name: Generate compliance report
+        run: |
+          echo "# Firmware Compliance Report" > compliance-report.md
+          echo "" >> compliance-report.md
+          echo "**Date**: $(date -Iseconds)" >> compliance-report.md
+          echo "**Host**: $(hostname)" >> compliance-report.md
+          echo "" >> compliance-report.md
+          echo "## Scan Results" >> compliance-report.md
+          jq -r '.components[] | "- \(.name): \(.risk) risk"' scan-results.json >> compliance-report.md
+
+      - name: Upload compliance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: compliance-report
+          path: compliance-report.md
+          retention-days: 90
+
+  pre-deployment-gate:
+    name: Pre-Deployment Security Gate
+    runs-on: ubuntu-latest
+    needs: [firmware-scan, compliance-check]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Download scan results
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-scan-results
+
+      - name: Validate deployment readiness
+        run: |
+          RISK=$(jq -r '.overall_risk' scan-results.json)
+
+          echo "Deployment readiness check:"
+          echo "  Risk Level: $RISK"
+
+          case "$RISK" in
+            "NONE"|"LOW"|"MEDIUM")
+              echo "✅ Deployment approved"
+              exit 0
+              ;;
+            "HIGH")
+              echo "⚠️  Deployment requires manual approval"
+              # In production, trigger manual approval workflow
+              exit 0
+              ;;
+            "CRITICAL")
+              echo "❌ Deployment blocked due to critical security findings"
+              exit 1
+              ;;
+            *)
+              echo "❓ Unknown risk level"
+              exit 1
+              ;;
+          esac
