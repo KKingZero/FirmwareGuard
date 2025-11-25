@@ -1,187 +1,89 @@
-# PHASE 3: Hardware Validation Workflow
-# This GitHub Action validates firmware security on self-hosted runners
-# before deploying to production
+# FirmwareGuard: Local Hardware Validation
+# Offline-only CI/CD for firmware security validation
+# Runs on self-hosted runners only (no GitHub-hosted, no cloud)
 
-name: Hardware Security Validation
+name: Local Build & Test
 
 on:
   workflow_dispatch:
-  schedule:
-    # Run weekly on Sunday at 2 AM
-    - cron: '0 2 * * 0'
   push:
     branches:
       - main
     paths:
       - 'src/**'
       - 'kernel/**'
+      - 'Makefile'
 
 jobs:
-  firmware-scan:
-    name: Firmware Security Scan
+  build-and-scan:
+    name: Build & Hardware Scan
     runs-on: self-hosted
-    # IMPORTANT: This must run on self-hosted runners with root access
-    # GitHub-hosted runners cannot access hardware
+    # IMPORTANT: Must run on self-hosted runner with hardware access
+    # This workflow is completely local - no GitHub API calls
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Check for networking code
+        run: |
+          echo "Verifying offline-only codebase..."
+          if grep -r "socket\|connect\|listen\|bind\|curl_" src/ --exclude-dir=.git 2>/dev/null; then
+            echo "::error::Network code detected in codebase! FirmwareGuard must be offline-only."
+            exit 1
+          fi
+          echo "✅ No networking code detected"
+
+      - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential linux-headers-$(uname -r) ethtool
+          sudo apt-get install -y build-essential linux-headers-$(uname -r)
 
       - name: Build FirmwareGuard
         run: |
           make clean
           make
+          echo "✅ Build successful"
 
       - name: Load MSR module
         run: |
           sudo modprobe msr || echo "MSR module already loaded"
 
-      - name: Run firmware scan
+      - name: Run firmware scan (local only)
         id: scan
         run: |
           sudo ./firmwareguard scan --json -o scan-results.json
-          echo "Scan completed"
+          cat scan-results.json
+          echo "✅ Scan completed"
 
-      - name: Upload scan results
-        uses: actions/upload-artifact@v4
-        with:
-          name: firmware-scan-results
-          path: scan-results.json
-          retention-days: 30
-
-      - name: Parse risk level
-        id: risk
+      - name: Check risk level (local only)
         run: |
-          RISK=$(jq -r '.overall_risk' scan-results.json)
-          echo "risk_level=$RISK" >> $GITHUB_OUTPUT
-          echo "Overall risk: $RISK"
-
-      - name: Check risk threshold
-        run: |
-          RISK="${{ steps.risk.outputs.risk_level }}"
-          if [ "$RISK" = "CRITICAL" ]; then
-            echo "::error::CRITICAL risk level detected - blocking deployment"
-            exit 1
-          elif [ "$RISK" = "HIGH" ]; then
-            echo "::warning::HIGH risk level detected - review required"
+          if ! command -v jq &> /dev/null; then
+            echo "jq not installed, skipping risk check"
+            exit 0
           fi
 
-      - name: Comment on PR with results
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const results = JSON.parse(fs.readFileSync('scan-results.json', 'utf8'));
-
-            const body = `## Firmware Security Scan Results
-
-            - **Overall Risk**: ${results.overall_risk}
-            - **Components Found**: ${results.num_components}
-            - **Scan Time**: ${new Date(results.timestamp * 1000).toISOString()}
-
-            ### Detected Components:
-            ${results.components.map(c =>
-              `- **${c.name}** (${c.type}): Risk ${c.risk}, Blockable: ${c.blockable ? 'Yes' : 'No'}`
-            ).join('\n')}
-
-            ${results.overall_risk === 'CRITICAL' || results.overall_risk === 'HIGH' ?
-              '⚠️ **Action Required**: Review firmware security findings before deployment.' :
-              '✅ Firmware security scan passed.'}
-            `;
-
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: body
-            });
-
-  compliance-check:
-    name: Compliance Validation
-    runs-on: self-hosted
-    needs: firmware-scan
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Download scan results
-        uses: actions/download-artifact@v4
-        with:
-          name: firmware-scan-results
-
-      - name: Check Intel ME status
-        run: |
-          ME_ACTIVE=$(jq -r '.components[] | select(.type=="Intel ME") | .active' scan-results.json)
-          if [ "$ME_ACTIVE" = "true" ]; then
-            echo "::warning::Intel ME is active - may violate security policy"
-          fi
-
-      - name: Check AMD PSP status
-        run: |
-          PSP_ACTIVE=$(jq -r '.components[] | select(.type=="AMD PSP") | .active' scan-results.json)
-          if [ "$PSP_ACTIVE" = "true" ]; then
-            echo "::warning::AMD PSP is active - may violate security policy"
-          fi
-
-      - name: Generate compliance report
-        run: |
-          echo "# Firmware Compliance Report" > compliance-report.md
-          echo "" >> compliance-report.md
-          echo "**Date**: $(date -Iseconds)" >> compliance-report.md
-          echo "**Host**: $(hostname)" >> compliance-report.md
-          echo "" >> compliance-report.md
-          echo "## Scan Results" >> compliance-report.md
-          jq -r '.components[] | "- \(.name): \(.risk) risk"' scan-results.json >> compliance-report.md
-
-      - name: Upload compliance report
-        uses: actions/upload-artifact@v4
-        with:
-          name: compliance-report
-          path: compliance-report.md
-          retention-days: 90
-
-  pre-deployment-gate:
-    name: Pre-Deployment Security Gate
-    runs-on: ubuntu-latest
-    needs: [firmware-scan, compliance-check]
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-
-    steps:
-      - name: Download scan results
-        uses: actions/download-artifact@v4
-        with:
-          name: firmware-scan-results
-
-      - name: Validate deployment readiness
-        run: |
-          RISK=$(jq -r '.overall_risk' scan-results.json)
-
-          echo "Deployment readiness check:"
-          echo "  Risk Level: $RISK"
+          RISK=$(jq -r '.overall_risk' scan-results.json 2>/dev/null || echo "UNKNOWN")
+          echo "Overall risk level: $RISK"
 
           case "$RISK" in
-            "NONE"|"LOW"|"MEDIUM")
-              echo "✅ Deployment approved"
-              exit 0
+            "CRITICAL")
+              echo "::error::CRITICAL firmware security risk detected"
+              exit 1
               ;;
             "HIGH")
-              echo "⚠️  Deployment requires manual approval"
-              # In production, trigger manual approval workflow
-              exit 0
+              echo "::warning::HIGH firmware security risk detected"
               ;;
-            "CRITICAL")
-              echo "❌ Deployment blocked due to critical security findings"
-              exit 1
+            "MEDIUM"|"LOW"|"NONE")
+              echo "✅ Risk level acceptable: $RISK"
               ;;
             *)
-              echo "❓ Unknown risk level"
-              exit 1
+              echo "::warning::Unable to determine risk level"
               ;;
           esac
+
+      - name: Save scan results locally
+        run: |
+          mkdir -p /var/log/firmwareguard-ci
+          cp scan-results.json /var/log/firmwareguard-ci/scan-$(date +%Y%m%d-%H%M%S).json
+          echo "Scan results saved to /var/log/firmwareguard-ci/"

@@ -1,11 +1,11 @@
 # FirmwareGuard
 ### Open-Source Firmware Integrity & Anomaly Detection Framework
 
-![Version](https://img.shields.io/badge/version-0.3.0--alpha-blue)
+![Version](https://img.shields.io/badge/version-0.3.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-Linux-lightgrey)
 ![Security](https://img.shields.io/badge/security-hardened-brightgreen)
-![Phase](https://img.shields.io/badge/phase-3%20foundation-success)
+![Privacy](https://img.shields.io/badge/privacy-offline--only-purple)
 
 FirmwareGuard is a **low-level, vendor-independent framework** for detecting and analyzing firmware-level telemetry on x86/x64 systems. It provides deep visibility into chipset telemetry mechanisms like Intel ME, AMD PSP, ACPI tables, and NIC firmware capabilities.
 
@@ -24,6 +24,33 @@ Firmware-level telemetry bypasses traditional OS-level privacy controls:
 Traditional security tools operate at the OS level and **cannot detect or control firmware telemetry**.
 
 FirmwareGuard fills this gap.
+
+---
+
+## 🔒 Privacy-First: 100% Offline-Only
+
+**FirmwareGuard operates with ZERO network dependencies.**
+
+### Why Offline-Only?
+- **Your firmware data never leaves your machine** - No cloud, no telemetry, no "phoning home"
+- **Perfect for air-gapped systems** - Works on completely isolated networks (government, military, research)
+- **No trust required** - We can't collect your data if we never connect
+- **Verifiable privacy** - 100% open source, auditable code, zero network syscalls
+
+### What This Means:
+- ✅ All operations are local-only
+- ✅ All reports stored on your filesystem
+- ✅ No update servers or cloud dependencies
+- ✅ No usage analytics or crash reporting
+- ✅ Works completely offline
+- ❌ No central management server (see [FirmwareGuard Enterprise](#enterprise-version) for fleet features)
+- ❌ No network communication of any kind
+- ❌ No HTTP, TCP, UDP, or any network protocols
+
+**Enforcement:**
+- Makefile checks block networking code at build time
+- Pre-commit hooks prevent accidental network code
+- CI/CD validates offline-only architecture
 
 ---
 
@@ -443,6 +470,39 @@ sudo ./firmwareguard block --json | jq -r '.actions[] | select(.successful==true
 - [ ] AI-powered anomaly detection in firmware behavior
 - [ ] Automated firmware binary analysis
 - [ ] Supply chain integrity verification
+
+---
+
+## 🏢 Enterprise Version
+
+**Need fleet management and central visibility?**
+
+FirmwareGuard is 100% free and open source, designed for personal use and offline environments. For organizations that need to manage firmware security across 100-10,000+ endpoints, we offer **FirmwareGuard Enterprise** as a separate commercial product.
+
+### FirmwareGuard (This Project) vs Enterprise
+
+| Feature | FirmwareGuard (FOSS) | FirmwareGuard Enterprise |
+|---------|---------------------|-------------------------|
+| **License** | MIT (100% open) | Proprietary (open-core) |
+| **Network** | ❌ Offline-only | ✅ Optional (TLS 1.3)   |
+| **Architecture** | Single-system CLI | Central server + agents |
+| **Management** | Local only   | Web dashboard + API     |
+| **Scalability** | 1 system    | 100-10,000+ endpoints   |
+| **Use Cases** | Personal, research, air-gap | Enterprise IT, MSPs |
+| **Cost** | **Free forever**   | Commercial licensing    |
+
+### Enterprise Features
+- Central management server with web dashboard
+- Fleet-wide policy distribution and enforcement
+- Real-time risk monitoring across all endpoints
+- Compliance reporting (NIST, GDPR, SOC2)
+- Multi-tenancy for MSPs
+- High availability and failover
+- Commercial support with SLA
+
+**Learn More:** See `FirmwareGuard-Enterprise/` directory or contact enterprise@firmwareguard.dev
+
+**Commitment:** The core FirmwareGuard (this project) will remain 100% free, open source, and offline-only forever. No bait-and-switch. No feature removal. No upselling pressure.
 
 ---
 

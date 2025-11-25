@@ -1,8 +1,39 @@
 # FirmwareGuard Phase 3 Implementation Summary
 
-**Date:** 2025-11-22
-**Version:** 0.3.0-alpha
-**Status:** ✅ Complete (Foundation)
+**Date:** 2025-11-25
+**Version:** 0.3.0
+**Status:** ⚠️ DEPRECATED (Architecture Pivot)
+
+---
+
+## ⚠️ IMPORTANT: ARCHITECTURAL PIVOT
+
+**Date of Pivot:** 2025-11-25
+
+FirmwareGuard has undergone a **fundamental architectural change** to become a **100% offline, local-only privacy tool**. The server/agent networking features implemented in this phase are now **DEPRECATED** and will be removed.
+
+**What Changed:**
+- **Before:** Enterprise fleet management with central server and networked agents
+- **After:** Personal privacy tool with zero network dependencies (offline-only)
+
+**Deprecated Components:**
+- `/src/server/*` - Central management server (WILL BE REMOVED)
+- Agent networking code - libcurl, TLS client, HTTP communication (WILL BE REMOVED)
+- Web dashboard (was planned, now cancelled)
+- Fleet management features (moved to separate "FirmwareGuard Enterprise" commercial product)
+
+**What Stays:**
+- All Phase 1 & 2 features (hardware probing, ME/PSP blocking, etc.)
+- Local agent for scheduled scans (modified to be purely local)
+- CI/CD integration (GitHub Actions on self-hosted runners - local only)
+- All security fixes and enhancements
+
+**New Direction:**
+See `ROADMAP_V2.md` for the updated offline-only roadmap focusing on advanced local firmware analysis, anomaly detection, and personal privacy hardening.
+
+---
+
+## Original Phase 3 Summary (Now Deprecated)
 
 ---
 

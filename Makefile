@@ -69,15 +69,35 @@ ALL_OBJS = $(CORE_OBJS) $(BLOCK_OBJS) $(AUDIT_OBJS) $(SAFETY_OBJS) \
 
 # Default target
 .PHONY: all
-all: $(BUILD_DIR) $(TARGET)
+all: $(BUILD_DIR) $(TARGET) check-offline
 	@echo ""
 	@echo "========================================="
-	@echo "  FirmwareGuard Phase 2 Build Complete"
+	@echo "  FirmwareGuard v0.3.0 Build Complete"
 	@echo "========================================="
 	@echo "Binary: ./$(TARGET)"
 	@echo ""
 	@echo "To install system-wide: sudo make install"
 	@echo "To build kernel module: make kernel"
+	@echo ""
+
+# OFFLINE-ONLY ENFORCEMENT: Check for networking code
+.PHONY: check-offline
+check-offline:
+	@echo "Verifying offline-only codebase..."
+	@NETWORK_CODE=$$(grep -r "socket\|connect\|bind\|listen\|accept\|recv\|send\|curl_\|http_" $(SRC_DIR) --include="*.c" --include="*.h" 2>/dev/null | grep -v "// " || true); \
+	if [ -n "$$NETWORK_CODE" ]; then \
+		echo ""; \
+		echo "⚠️  WARNING: Potential networking code detected!"; \
+		echo "⚠️  FirmwareGuard must be completely offline-only."; \
+		echo ""; \
+		echo "Detected in:"; \
+		echo "$$NETWORK_CODE"; \
+		echo ""; \
+		echo "❌ BUILD FAILED: Remove networking code before building."; \
+		echo ""; \
+		exit 1; \
+	fi
+	@echo "✅ Offline-only verification passed"
 	@echo ""
 
 # Create build directory
