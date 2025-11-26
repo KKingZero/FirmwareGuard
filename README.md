@@ -1,7 +1,7 @@
 # FirmwareGuard
 ### Open-Source Firmware Integrity & Anomaly Detection Framework
 
-![Version](https://img.shields.io/badge/version-0.3.0-blue)
+![Version](https://img.shields.io/badge/version-1.0.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Platform](https://img.shields.io/badge/platform-Linux-lightgrey)
 ![Security](https://img.shields.io/badge/security-hardened-brightgreen)

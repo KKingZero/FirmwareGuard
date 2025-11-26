@@ -5,6 +5,9 @@
 #include <errno.h>
 #include <dirent.h>
 
+/* Forward declaration for secure_execute() */
+static int secure_execute(const char *program, char *const argv[]);
+
 int grub_init(grub_config_t *config) {
     struct stat st;
 
@@ -121,11 +124,17 @@ int grub_backup_config(safety_context_t *safety_ctx) {
         snprintf(timestamp_backup, sizeof(timestamp_backup),
                  "/etc/default/grub.bak.%s", timestamp_str);
 
-        /* Create timestamped backup copy */
-        char cp_cmd[1024];
-        snprintf(cp_cmd, sizeof(cp_cmd), "cp -a %s %s",
-                 GRUB_DEFAULT_FILE, timestamp_backup);
-        if (system(cp_cmd) == 0) {
+        /* SECURITY FIX: Use secure_execute() instead of system()
+         * to prevent potential command injection */
+        char *cp_argv[] = {
+            "/bin/cp",
+            "-a",
+            GRUB_DEFAULT_FILE,
+            timestamp_backup,
+            NULL
+        };
+
+        if (secure_execute("/bin/cp", cp_argv) == 0) {
             FG_INFO("Created timestamped GRUB backup: %s", timestamp_backup);
         } else {
             FG_WARN("Failed to create timestamped backup (continuing anyway)");
@@ -291,6 +300,7 @@ int grub_write_config(safety_context_t *safety_ctx,
     char line[1024];
     char temp_file[256];
     bool replaced = false;
+    int temp_fd;
 
     if (!config || !config->is_modified) {
         return FG_SUCCESS;
@@ -301,19 +311,35 @@ int grub_write_config(safety_context_t *safety_ctx,
         return FG_SUCCESS;
     }
 
-    /* Create temporary file */
-    snprintf(temp_file, sizeof(temp_file), "%s.tmp", config->grub_file);
+    /* SECURITY FIX: Use mkstemp() to create secure temporary file
+     * This prevents TOCTOU (Time-of-Check-Time-of-Use) race conditions
+     * where an attacker could create a symlink to overwrite arbitrary files */
+    snprintf(temp_file, sizeof(temp_file), "/tmp/fwguard-grub-XXXXXX");
+    temp_fd = mkstemp(temp_file);
+    if (temp_fd == -1) {
+        FG_LOG_ERROR("Failed to create secure temporary file: %s", strerror(errno));
+        return FG_ERROR;
+    }
+
+    /* Set secure permissions (owner read/write only) */
+    if (fchmod(temp_fd, 0600) != 0) {
+        FG_WARN("Failed to set secure permissions on temp file: %s", strerror(errno));
+    }
 
     fp_in = fopen(config->grub_file, "r");
     if (!fp_in) {
         FG_LOG_ERROR("Failed to open GRUB config for reading");
+        close(temp_fd);
+        unlink(temp_file);
         return FG_ERROR;
     }
 
-    fp_out = fopen(temp_file, "w");
+    fp_out = fdopen(temp_fd, "w");
     if (!fp_out) {
-        FG_LOG_ERROR("Failed to create temporary file");
+        FG_LOG_ERROR("Failed to open temporary file stream");
         fclose(fp_in);
+        close(temp_fd);
+        unlink(temp_file);
         return FG_ERROR;
     }
 

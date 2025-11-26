@@ -1,4 +1,79 @@
 #include "blocker.h"
+#include <sys/wait.h>
+#include <ctype.h>
+
+/* Validate network interface name to prevent command injection */
+static bool is_valid_interface_name(const char *iface) {
+    if (!iface || strlen(iface) == 0) {
+        return false;
+    }
+
+    /* Interface names should be alphanumeric plus hyphen/underscore/colon
+     * Typical formats: eth0, wlan0, enp3s0, br-1234567890ab, docker0, etc.
+     * Max length is typically 15 chars (IFNAMSIZ - 1) */
+    size_t len = strlen(iface);
+    if (len == 0 || len > 15) {
+        return false;
+    }
+
+    /* Whitelist approach: only allow safe characters */
+    for (size_t i = 0; i < len; i++) {
+        char c = iface[i];
+        if (!isalnum((unsigned char)c) && c != '-' && c != '_' && c != ':' && c != '.') {
+            return false;
+        }
+    }
+
+    /* Additional check: must not contain shell metacharacters */
+    if (strchr(iface, ';') || strchr(iface, '&') || strchr(iface, '|') ||
+        strchr(iface, '`') || strchr(iface, '$') || strchr(iface, '\n') ||
+        strchr(iface, ' ') || strchr(iface, '\t')) {
+        return false;
+    }
+
+    return true;
+}
+
+/* Secure execution helper - prevents command injection */
+static int secure_execute(const char *program, char *const argv[]) {
+    pid_t pid;
+    int status;
+
+    /* Clear environment to prevent PATH manipulation */
+    char *clean_env[] = {
+        "PATH=/usr/sbin:/usr/bin:/sbin:/bin",
+        NULL
+    };
+
+    pid = fork();
+    if (pid < 0) {
+        FG_LOG_ERROR("fork() failed: %s", strerror(errno));
+        return FG_ERROR;
+    }
+
+    if (pid == 0) {
+        /* Child process */
+        execve(program, argv, clean_env);
+        /* If execve returns, it failed */
+        FG_LOG_ERROR("execve(%s) failed: %s", program, strerror(errno));
+        _exit(127);
+    }
+
+    /* Parent process - wait for child */
+    if (waitpid(pid, &status, 0) < 0) {
+        FG_LOG_ERROR("waitpid() failed: %s", strerror(errno));
+        return FG_ERROR;
+    }
+
+    if (WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    } else if (WIFSIGNALED(status)) {
+        FG_LOG_ERROR("Command terminated by signal %d", WTERMSIG(status));
+        return FG_ERROR;
+    }
+
+    return FG_ERROR;
+}
 
 int blocker_init(void) {
     FG_INFO("Blocker subsystem initialized (MVP: non-destructive mode)");
@@ -76,7 +151,6 @@ int blocker_disable_amd_psp(block_result_t *result) {
 }
 
 int blocker_disable_wol(const char *interface, block_result_t *result) {
-    char cmd[256];
     int ret;
 
     if (!interface || !result) {
@@ -89,9 +163,31 @@ int blocker_disable_wol(const char *interface, block_result_t *result) {
             "Wake-on-LAN (%s)", interface);
     result->attempted = true;
 
-    /* Try to disable WoL using ethtool */
-    snprintf(cmd, sizeof(cmd), "ethtool -s %s wol d 2>/dev/null", interface);
-    ret = system(cmd);
+    /* SECURITY: Validate interface name to prevent command injection */
+    if (!is_valid_interface_name(interface)) {
+        FG_LOG_ERROR("Invalid interface name (contains unsafe characters): %s", interface);
+        result->successful = false;
+        snprintf(result->method, sizeof(result->method),
+                "Validation failed - unsafe interface name");
+        snprintf(result->details, sizeof(result->details),
+                "Interface name '%s' contains invalid characters", interface);
+        snprintf(result->recommendation, sizeof(result->recommendation),
+                "Verify interface name and try again");
+        return FG_ERROR;
+    }
+
+    /* Try to disable WoL using ethtool with secure execution */
+    char *argv[] = {
+        "/usr/sbin/ethtool",
+        "-s",
+        (char *)interface,  /* Safe after validation */
+        "wol",
+        "d",
+        NULL
+    };
+
+    FG_DEBUG("Executing: ethtool -s %s wol d", interface);
+    ret = secure_execute("/usr/sbin/ethtool", argv);
 
     if (ret == 0) {
         result->successful = true;

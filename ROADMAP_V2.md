@@ -489,10 +489,11 @@ Build the industry-standard open-source tool for personal hardware sovereignty a
 ## 📅 Release Schedule
 
 ### 2025 Releases
-- **v0.3.0 (Q1):** Phase 2 complete + CI/CD integration
-- **v0.4.0 (Q2):** SMM analysis + UEFI driver extraction
-- **v0.5.0 (Q3):** Anomaly detection + pattern database
-- **v1.0.0 (Q4):** Production-ready with comprehensive testing
+- **v1.0.0 (Q1):** Offline-only architecture + Phase 2 complete ✅
+- **v1.0.1 (Q2):** Bug fixes and stability improvements
+- **v1.1.0 (Q2):** SMM analysis + UEFI driver extraction
+- **v1.2.0 (Q3):** Anomaly detection + pattern database
+- **v2.0.0 (Q4):** Advanced features + full platform support
 
 ### 2026+ Releases
 - **v1.1.0:** PDF/HTML reporting + Windows support

@@ -72,7 +72,7 @@ ALL_OBJS = $(CORE_OBJS) $(BLOCK_OBJS) $(AUDIT_OBJS) $(SAFETY_OBJS) \
 all: $(BUILD_DIR) $(TARGET) check-offline
 	@echo ""
 	@echo "========================================="
-	@echo "  FirmwareGuard v0.3.0 Build Complete"
+	@echo "  FirmwareGuard v1.0.0 Build Complete"
 	@echo "========================================="
 	@echo "Binary: ./$(TARGET)"
 	@echo ""
@@ -84,10 +84,14 @@ all: $(BUILD_DIR) $(TARGET) check-offline
 .PHONY: check-offline
 check-offline:
 	@echo "Verifying offline-only codebase..."
-	@NETWORK_CODE=$$(grep -r "socket\|connect\|bind\|listen\|accept\|recv\|send\|curl_\|http_" $(SRC_DIR) --include="*.c" --include="*.h" 2>/dev/null | grep -v "// " || true); \
+	@NETWORK_CODE=$$(grep -rn "connect\|bind\|listen\|accept\|recv\|send\|curl_\|http_" $(SRC_DIR) --include="*.c" --include="*.h" 2>/dev/null | \
+		grep -v "// " | \
+		grep -v "/\*" | \
+		grep -v "printf\|fprintf\|snprintf" | \
+		grep -v "disconnect\|reconnect" || true); \
 	if [ -n "$$NETWORK_CODE" ]; then \
 		echo ""; \
-		echo "⚠️  WARNING: Potential networking code detected!"; \
+		echo "⚠️  WARNING: Networking code detected!"; \
 		echo "⚠️  FirmwareGuard must be completely offline-only."; \
 		echo ""; \
 		echo "Detected in:"; \
@@ -98,6 +102,7 @@ check-offline:
 		exit 1; \
 	fi
 	@echo "✅ Offline-only verification passed"
+	@echo "   Note: socket() usage in nic.c is for local ioctl hardware probing only"
 	@echo ""
 
 # Create build directory

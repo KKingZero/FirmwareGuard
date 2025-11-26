@@ -3,6 +3,7 @@
 #include <sys/file.h>
 #include <dirent.h>
 #include <limits.h>
+#include <ctype.h>
 
 /* Default backup directory */
 #define BACKUP_DIR "/var/lib/firmwareguard/backups"
