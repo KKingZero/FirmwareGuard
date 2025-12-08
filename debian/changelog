@@ -1,0 +1,17 @@
+firmwareguard (1.0.0-1) unstable; urgency=medium
+
+  * Initial release
+  * Complete Phase 1 & 2 implementation
+  * Hardware probe engine (MSR, PCI, MMIO)
+  * Intel ME and AMD PSP detection
+  * ACPI table parsing for telemetry
+  * NIC firmware telemetry detection
+  * Active blocking and mitigation
+  * Pattern-based detection database
+  * Offline-only architecture
+  * Security hardening (stack protection, PIE, RELRO)
+  * Safety framework with backups and rollback
+  * Systemd service integration
+  * Comprehensive documentation
+
+ -- FirmwareGuard Team <contact@firmwareguard.dev>  Fri, 29 Nov 2025 00:00:00 +0000

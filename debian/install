@@ -1,0 +1,3 @@
+patterns/* usr/share/firmwareguard/patterns
+README.md usr/share/doc/firmwareguard
+LICENSE usr/share/doc/firmwareguard

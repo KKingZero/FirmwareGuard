@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  firmwareguard-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: firmwareguard:dev
+    container_name: firmwareguard-dev
+    privileged: true  # Required for hardware access
+    volumes:
+      # Mount host system interfaces (read-only for safety)
+      - /sys:/sys:ro
+      - /dev:/dev:ro
+      # Mount for reports output
+      - ./reports:/firmwareguard/reports
+      # Mount for custom patterns
+      - ./patterns:/firmwareguard/patterns:ro
+    environment:
+      - FG_PATTERNS_DIR=/firmwareguard/patterns
+    command: /bin/bash
+    stdin_open: true
+    tty: true
+
+  # CI/CD validation service
+  firmwareguard-ci:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: firmwareguard:ci
+    privileged: true
+    volumes:
+      - /sys:/sys:ro
+      - /dev:/dev:ro
+      - ./reports:/firmwareguard/reports
+    command: >
+      sh -c "
+        echo 'Running FirmwareGuard hardware validation...' &&
+        ./firmwareguard scan --json -o /firmwareguard/reports/scan-$(date +%Y%m%d-%H%M%S).json &&
+        echo 'Scan complete. Check ./reports/ for output.'
+      "
+
+# Usage:
+# docker-compose up firmwareguard-dev    # Interactive development
+# docker-compose run firmwareguard-ci    # CI/CD validation

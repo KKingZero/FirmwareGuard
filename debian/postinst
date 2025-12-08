@@ -1,0 +1,36 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Load MSR kernel module (required for operation)
+        if [ -f /proc/modules ]; then
+            modprobe msr || true
+        fi
+
+        # Create configuration directory
+        if [ ! -d /etc/firmwareguard ]; then
+            mkdir -p /etc/firmwareguard
+            chmod 755 /etc/firmwareguard
+        fi
+
+        # Reload systemd if service file was installed
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload || true
+        fi
+
+        echo "FirmwareGuard installed successfully!"
+        echo ""
+        echo "Quick start:"
+        echo "  sudo firmwareguard scan                 # Scan your system"
+        echo "  sudo firmwareguard scan --json -o scan.json"
+        echo ""
+        echo "Pattern database: /usr/share/firmwareguard/patterns"
+        echo "Documentation: /usr/share/doc/firmwareguard"
+        echo ""
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

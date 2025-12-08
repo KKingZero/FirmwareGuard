@@ -527,11 +527,13 @@ sudo ./firmwareguard apply --dry-run
 
 Next phase will add:
 
-- **Fleet Management Dashboard**: Web-based central management
-- **CI/CD Integration**: GitHub Actions, GitLab CI plugins
-- **Windows Support**: Basic detection on Windows platforms
+- **Advanced Local Analysis**: SMM analysis, UEFI driver enumeration (offline)
+- **CI/CD Integration**: GitHub Actions, GitLab CI plugins (self-hosted runners - offline)
+- **Windows Support**: Basic detection on Windows platforms (offline)
 - **Advanced Detection**: SMM, Boot Guard, Secure Boot analysis
-- **Automated Remediation**: AI-powered anomaly response
+- **Local Anomaly Detection**: AI-powered anomaly detection (offline models)
+
+**Note:** Fleet management and web dashboards are available in FirmwareGuard Enterprise (separate commercial product).
 
 ---
 

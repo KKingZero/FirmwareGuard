@@ -23,6 +23,8 @@ SAFETY_DIR = $(SRC_DIR)/safety
 CONFIG_MGMT_DIR = $(SRC_DIR)/config
 UEFI_DIR = $(SRC_DIR)/uefi
 GRUB_DIR = $(SRC_DIR)/grub
+PATTERN_DIR = $(SRC_DIR)/patterns
+DETECT_DIR = $(SRC_DIR)/detection
 KERNEL_DIR = kernel
 
 # Target binary
@@ -48,11 +50,27 @@ UEFI_SRCS = $(UEFI_DIR)/uefi_vars.c
 
 GRUB_SRCS = $(GRUB_DIR)/grub_config.c
 
+# Pattern database sources
+PATTERN_SRCS = $(PATTERN_DIR)/pattern_db.c \
+               $(PATTERN_DIR)/pattern_match.c
+
+# Phase 3 detection sources
+DETECT_SRCS = $(DETECT_DIR)/smm_detect.c \
+              $(DETECT_DIR)/uefi_extract.c \
+              $(DETECT_DIR)/bootguard_detect.c \
+              $(DETECT_DIR)/txt_sgx_detect.c \
+              $(DETECT_DIR)/baseline_capture.c \
+              $(DETECT_DIR)/implant_detect.c
+
+# cJSON library
+CJSON_SRC = $(SRC_DIR)/cJSON.c
+
 MAIN_SRC = $(SRC_DIR)/main.c
 
 # All sources
 ALL_SRCS = $(CORE_SRCS) $(BLOCK_SRCS) $(AUDIT_SRCS) $(SAFETY_SRCS) \
-           $(CONFIG_MGMT_SRCS) $(UEFI_SRCS) $(GRUB_SRCS) $(MAIN_SRC)
+           $(CONFIG_MGMT_SRCS) $(UEFI_SRCS) $(GRUB_SRCS) $(PATTERN_SRCS) \
+           $(DETECT_SRCS) $(CJSON_SRC) $(MAIN_SRC)
 
 # Object files
 CORE_OBJS = $(patsubst $(CORE_DIR)/%.c,$(BUILD_DIR)/core_%.o,$(CORE_SRCS))
@@ -62,10 +80,14 @@ SAFETY_OBJS = $(patsubst $(SAFETY_DIR)/%.c,$(BUILD_DIR)/safety_%.o,$(SAFETY_SRCS
 CONFIG_MGMT_OBJS = $(patsubst $(CONFIG_MGMT_DIR)/%.c,$(BUILD_DIR)/config_%.o,$(CONFIG_MGMT_SRCS))
 UEFI_OBJS = $(patsubst $(UEFI_DIR)/%.c,$(BUILD_DIR)/uefi_%.o,$(UEFI_SRCS))
 GRUB_OBJS = $(patsubst $(GRUB_DIR)/%.c,$(BUILD_DIR)/grub_%.o,$(GRUB_SRCS))
+PATTERN_OBJS = $(patsubst $(PATTERN_DIR)/%.c,$(BUILD_DIR)/pattern_%.o,$(PATTERN_SRCS))
+DETECT_OBJS = $(patsubst $(DETECT_DIR)/%.c,$(BUILD_DIR)/detect_%.o,$(DETECT_SRCS))
+CJSON_OBJ = $(BUILD_DIR)/cJSON.o
 MAIN_OBJ = $(BUILD_DIR)/main.o
 
 ALL_OBJS = $(CORE_OBJS) $(BLOCK_OBJS) $(AUDIT_OBJS) $(SAFETY_OBJS) \
-           $(CONFIG_MGMT_OBJS) $(UEFI_OBJS) $(GRUB_OBJS) $(MAIN_OBJ)
+           $(CONFIG_MGMT_OBJS) $(UEFI_OBJS) $(GRUB_OBJS) $(PATTERN_OBJS) \
+           $(DETECT_OBJS) $(CJSON_OBJ) $(MAIN_OBJ)
 
 # Default target
 .PHONY: all
@@ -142,6 +164,18 @@ $(BUILD_DIR)/uefi_%.o: $(UEFI_DIR)/%.c
 $(BUILD_DIR)/grub_%.o: $(GRUB_DIR)/%.c
 	@echo "Compiling $<..."
 	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/pattern_%.o: $(PATTERN_DIR)/%.c
+	@echo "Compiling $<..."
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/detect_%.o: $(DETECT_DIR)/%.c
+	@echo "Compiling $<..."
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/cJSON.o: $(SRC_DIR)/cJSON.c
+	@echo "Compiling $<..."
+	@$(CC) $(CFLAGS) -Wno-unused-parameter -c $< -o $@
 
 $(BUILD_DIR)/main.o: $(MAIN_SRC)
 	@echo "Compiling $<..."

@@ -607,21 +607,23 @@ Based on implementation experience, recommended Phase 3 features:
    - GRUB menu entry for rollback
    - Emergency shell with firmware restore tools
 
-4. **Fleet Management**:
+4. **Fleet Management** (Enterprise-Only - Separate Product):
    - Central management server
    - Push-based configuration
    - Aggregated reporting
    - Policy enforcement
+
+   **Note:** These features will NOT be added to the free/open source version. They are available only in FirmwareGuard Enterprise.
 
 5. **Platform Expansion**:
    - ARM server support (Ampere, Graviton)
    - Windows basic detection
    - macOS T2/Secure Enclave support
 
-6. **CI/CD Integration**:
-   - GitHub Actions plugin
-   - GitLab CI integration
-   - Pre-deployment validation gates
+6. **CI/CD Integration** (Offline-Only):
+   - GitHub Actions plugin (self-hosted runners)
+   - GitLab CI integration (local runners)
+   - Pre-deployment validation gates (offline)
 
 ---
 

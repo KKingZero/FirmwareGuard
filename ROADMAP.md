@@ -81,42 +81,36 @@ Build the industry-standard open-source framework for firmware-level privacy har
 
 ---
 
-## 🎯 Phase 3: Enterprise & Fleet Management (FUTURE)
+## 🎯 Phase 3: Advanced Local Analysis & Hardening
 **Timeline:** Weeks 19-30 (3 months) | **Target:** Q3 2025
 
-### 3.1 Central Management Dashboard
-- [ ] Web-based management console
-- [ ] Fleet-wide firmware audit aggregation
-- [ ] Real-time risk monitoring
-- [ ] Policy enforcement engine
-- [ ] Compliance reporting (NIST, GDPR)
+**Focus:** Deep firmware analysis, anomaly detection, and comprehensive privacy hardening - all offline.
 
-### 3.2 Agent Architecture
-- [ ] Lightweight agent deployment (< 10MB)
-- [ ] Scheduled scanning (cron/systemd timers)
-- [ ] Push-based blocking from central server
-- [ ] Encrypted C2 communications
-- [ ] Offline audit cache
-
-### 3.3 CI/CD Integration
-- [ ] GitHub Actions plugin
-- [ ] GitLab CI integration
-- [ ] Jenkins pipeline support
+### 3.1 Local CI/CD Integration (Offline Only)
+- [ ] GitHub Actions (self-hosted runners only)
+- [ ] GitLab CI integration (local runners)
+- [ ] Jenkins pipeline support (local)
 - [ ] Pre-deployment hardware validation
-- [ ] Automated compliance gates
+- [ ] Automated compliance gates (offline)
 
-### 3.4 Platform Expansion
-- [ ] Windows support (basic detection)
+### 3.2 Platform Expansion
+- [ ] Windows support (detection only, offline)
 - [ ] MacOS M-series support (T2/Secure Enclave)
 - [ ] ARM server platforms (Ampere, Graviton)
 - [ ] RISC-V experimental support
 
-### 3.5 Advanced Detection
+### 3.3 Advanced Detection
 - [ ] SMM (System Management Mode) analysis
 - [ ] UEFI driver enumeration
 - [ ] Boot Guard status detection
 - [ ] Secure Boot configuration audit
 - [ ] TXT (Trusted Execution Technology)
+
+### 3.4 Local Scheduled Scanning
+- [ ] Systemd timer-based scheduled scans
+- [ ] Boot-time validation
+- [ ] Automated local reports
+- [ ] Change detection (baseline comparison)
 
 ---
 
@@ -155,9 +149,9 @@ Build the industry-standard open-source framework for firmware-level privacy har
 - [ ] Docker container for testing
 
 ### Q2 2025
-- [ ] Official website (firmwareguard.dev)
-- [ ] Community Discord/Matrix server
-- [ ] Monthly development blog
+- [ ] Enhanced documentation website (static, GitHub Pages)
+- [ ] Community discussion forum (GitHub Discussions)
+- [ ] Development blog (Jekyll/Hugo static site)
 - [ ] Package repositories (apt, yum, AUR)
 - [ ] Homebrew formula
 
@@ -184,10 +178,10 @@ Build the industry-standard open-source framework for firmware-level privacy har
 - **Test Coverage:** >80% code coverage
 
 ### Phase 3
-- **Enterprise Adoption:** 10+ organizations
-- **Fleet Scale:** 1,000+ endpoints managed
-- **Platform Diversity:** Windows + Linux + macOS
+- **Individual Adoption:** 1,000+ active users
+- **Platform Diversity:** Linux (primary) + Windows/macOS (detection)
 - **Community:** 1,000+ GitHub stars
+- **Advanced Features:** SMM analysis, UEFI driver enumeration
 
 ---
 
@@ -213,10 +207,14 @@ Build the industry-standard open-source framework for firmware-level privacy har
 - Windows/macOS platform ports
 - Security vulnerability research
 
-### Sponsorship Tiers
-- **Individual:** $5/mo - Priority support
-- **Team:** $50/mo - Custom integrations
-- **Enterprise:** $500/mo - SLA + private consulting
+### Sponsorship Model
+
+**100% Free and Open Source**
+- No paid tiers or proprietary features
+- All development happens in public
+- Optional donations for project sustainability
+- Sponsorship recognition in README
+- No enterprise upsell or commercial features
 
 ---
 
@@ -248,20 +246,20 @@ Build the industry-standard open-source framework for firmware-level privacy har
 5. **Industry Impact:** Influence hardware vendor telemetry policies
 
 ### Strategic Partnerships
-- Hardware vendors (transparency program)
-- Linux distributions (default package inclusion)
-- Security frameworks (NIST, CIS benchmarks)
-- Cloud providers (VM security validation)
+- Privacy-focused Linux distributions (Qubes, Tails, Whonix)
+- Hardware vendors (transparency program - System76, Purism)
+- Security frameworks (NIST guidelines, CIS benchmarks)
+- Privacy organizations (EFF, FSF)
 
 ---
 
 ## 📅 Release Schedule
 
 ### 2025 Releases
-- **v0.2.0 (Q1):** Kernel module + HAP bit disable
-- **v0.3.0 (Q2):** Persistent blocking + systemd service
-- **v0.4.0 (Q3):** Web dashboard + agent
-- **v1.0.0 (Q4):** Production-ready enterprise release
+- **v1.0.0 (Q1):** Offline-only architecture + Phase 2 complete ✅
+- **v1.1.0 (Q2):** SMM analysis + UEFI driver extraction
+- **v1.2.0 (Q3):** Anomaly detection + local pattern database
+- **v2.0.0 (Q4):** Advanced features + full platform support
 
 ### Versioning
 - **Major (1.x):** Breaking changes, new architectures

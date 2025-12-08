@@ -1,0 +1,44 @@
+Source: firmwareguard
+Section: admin
+Priority: optional
+Maintainer: FirmwareGuard Team <contact@firmwareguard.dev>
+Build-Depends: debhelper-compat (= 13),
+               build-essential,
+               gcc,
+               make
+Standards-Version: 4.6.2
+Homepage: https://github.com/KKingZero/FirmwareGuard
+Vcs-Git: https://github.com/KKingZero/FirmwareGuard.git
+Vcs-Browser: https://github.com/KKingZero/FirmwareGuard
+Rules-Requires-Root: no
+
+Package: firmwareguard
+Architecture: amd64
+Depends: ${shlibc:Depends},
+         ${misc:Depends},
+         pciutils,
+         util-linux,
+         ethtool
+Recommends: linux-headers-generic,
+            python3,
+            python3-jsonschema
+Suggests: dmidecode,
+          lshw
+Description: Firmware integrity and anomaly detection framework
+ FirmwareGuard is an open-source framework for detecting and analyzing
+ firmware-level telemetry on x86/x64 systems. It provides deep visibility
+ into chipset telemetry mechanisms like Intel ME, AMD PSP, ACPI tables,
+ and NIC firmware capabilities.
+ .
+ Key features:
+  * Hardware probe and audit (Intel ME, AMD PSP, ACPI, NIC)
+  * Active hardening and blocking capabilities
+  * Pattern-based telemetry detection
+  * Offline-only operation (100% privacy-first)
+  * JSON and text report generation
+  *
+
+ Optional kernel module for advanced MMIO/DMA protection
+ .
+ Built for security researchers, hardware engineers, and privacy-focused
+ operators who need transparent, auditable firmware security.

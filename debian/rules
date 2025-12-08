@@ -1,0 +1,48 @@
+#!/usr/bin/make -f
+
+# FirmwareGuard Debian Rules
+
+# Hardening flags
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export DEB_CFLAGS_MAINT_APPEND = -Wall -Wextra
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	# Build userspace binary
+	$(MAKE)
+
+override_dh_auto_install:
+	# Install binary
+	install -D -m 0755 firmwareguard $(CURDIR)/debian/firmwareguard/usr/bin/firmwareguard
+
+	# Install pattern database
+	install -d $(CURDIR)/debian/firmwareguard/usr/share/firmwareguard/patterns
+	cp -r patterns/* $(CURDIR)/debian/firmwareguard/usr/share/firmwareguard/patterns/
+
+	# Install systemd service
+	install -D -m 0644 systemd/firmwareguard.service \
+		$(CURDIR)/debian/firmwareguard/lib/systemd/system/firmwareguard.service
+
+	# Install configuration directory
+	install -d $(CURDIR)/debian/firmwareguard/etc/firmwareguard
+
+	# Install documentation
+	install -D -m 0644 README.md $(CURDIR)/debian/firmwareguard/usr/share/doc/firmwareguard/README.md
+	install -D -m 0644 LICENSE $(CURDIR)/debian/firmwareguard/usr/share/doc/firmwareguard/LICENSE
+	install -D -m 0644 ARCHITECTURE.md $(CURDIR)/debian/firmwareguard/usr/share/doc/firmwareguard/ARCHITECTURE.md
+	install -D -m 0644 SECURITY_AUDIT_REPORT.md $(CURDIR)/debian/firmwareguard/usr/share/doc/firmwareguard/SECURITY_AUDIT_REPORT.md
+
+	# Install man page (if exists)
+	# install -D -m 0644 docs/firmwareguard.1 $(CURDIR)/debian/firmwareguard/usr/share/man/man1/firmwareguard.1
+
+override_dh_auto_clean:
+	$(MAKE) clean
+
+override_dh_auto_test:
+	# Skip tests during package build (requires root/hardware access)
+	@echo "Skipping tests (requires privileged access)"
+
+.PHONY: override_dh_auto_build override_dh_auto_install override_dh_auto_clean override_dh_auto_test

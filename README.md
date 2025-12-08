@@ -43,7 +43,7 @@ FirmwareGuard fills this gap.
 - ✅ No update servers or cloud dependencies
 - ✅ No usage analytics or crash reporting
 - ✅ Works completely offline
-- ❌ No central management server (see [FirmwareGuard Enterprise](#enterprise-version) for fleet features)
+- ❌ No central management server (Enterprise-only feature)
 - ❌ No network communication of any kind
 - ❌ No HTTP, TCP, UDP, or any network protocols
 
@@ -396,8 +396,10 @@ FirmwareGuard now incorporates a comprehensive **safety framework** to protect a
 
 ### Future Phases
 
-- **Phase 3:** Enterprise & Fleet Management, advanced detection (see ROADMAP.md for details)
+- **Phase 3:** Advanced local analysis, offline anomaly detection (see ROADMAP.md for details)
 - **Phase 4:** Research & Innovation
+
+**Note:** Fleet management and networking features are available only in FirmwareGuard Enterprise (separate commercial product).
 
 ---
 

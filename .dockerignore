@@ -1,0 +1,30 @@
+# Build artifacts
+build/
+*.o
+firmwareguard
+
+# Git
+.git/
+.gitignore
+
+# Documentation (included separately)
+docs/*.pdf
+
+# Logs
+*.log
+build.log
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak

@@ -254,10 +254,12 @@ sudo ./firmwareguard block
 - [ ] Unit tests framework
 
 **Medium Priority:**
-- [ ] Web dashboard for reports
+- [ ] Enhanced local reporting (PDF, HTML - offline)
 - [ ] Kernel module for DMA restriction
 - [ ] Persistent blocking configurations
-- [ ] Fleet management tools
+- [ ] Scheduled scanning (systemd timers - offline)
+
+**Note:** Web dashboards and fleet management are Enterprise-only features (separate product).
 
 **Nice to Have:**
 - [ ] MacOS support
