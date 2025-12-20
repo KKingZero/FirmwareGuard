@@ -1,0 +1,132 @@
+UEFI Runtime Integrity Checking Module - Complete File Listing
+==============================================================================
+
+IMPLEMENTATION FILES:
+--------------------
+
+1. Header File (API Definitions)
+   Path: /home/zero/FirmwareGuard/src/detection/uefi_integrity.h
+   Size: 8.9 KB
+   Lines: 248
+   Contains:
+   - EFI memory type and attribute constants
+   - Data structure definitions
+   - API function declarations
+   - Hook signature patterns
+   - Maximum limits and constants
+
+2. Implementation File (Core Logic)
+   Path: /home/zero/FirmwareGuard/src/detection/uefi_integrity.c
+   Size: 40 KB
+   Lines: 1,149
+   Contains:
+   - All API function implementations
+   - Security-hardened input validation
+   - Memory-safe operations
+   - Hook detection engine
+   - Risk assessment algorithms
+   - Baseline snapshot management
+   - Reporting functions
+
+3. Test Tool (Standalone Testing)
+   Path: /home/zero/FirmwareGuard/tools/test-uefi-integrity.c
+   Size: 6.4 KB
+   Lines: 177
+   Contains:
+   - Command-line interface
+   - Test scenarios
+   - Usage examples
+   - Baseline management
+
+DOCUMENTATION FILES:
+-------------------
+
+4. Comprehensive Documentation
+   Path: /home/zero/FirmwareGuard/docs/UEFI_INTEGRITY_MODULE.md
+   Contains:
+   - Complete API reference
+   - Usage examples
+   - Security considerations
+   - Threat detection capabilities
+   - Integration guide
+   - Performance characteristics
+
+5. Implementation Summary
+   Path: /home/zero/FirmwareGuard/UEFI_INTEGRITY_IMPLEMENTATION.md
+   Contains:
+   - Detailed implementation report
+   - Security features explained
+   - Code quality metrics
+   - Testing instructions
+   - Compilation status
+
+6. Quick Reference Guide
+   Path: /home/zero/FirmwareGuard/UEFI_INTEGRITY_QUICKREF.md
+   Contains:
+   - Fast lookup guide
+   - Common operations
+   - API cheat sheet
+   - Troubleshooting tips
+
+7. File Listing (This Document)
+   Path: /home/zero/FirmwareGuard/UEFI_INTEGRITY_FILES.txt
+
+BUILD SYSTEM:
+-------------
+
+8. Makefile (Updated)
+   Path: /home/zero/FirmwareGuard/Makefile
+   Changes:
+   - Added uefi_integrity.c to DETECT_SRCS
+   - Module automatically included in build
+
+COMPILED OUTPUT:
+----------------
+
+9. Object File
+   Path: /home/zero/FirmwareGuard/build/detect_uefi_integrity.o
+   Size: 40 KB
+   Type: ELF 64-bit LSB relocatable
+   Status: Successfully compiled
+
+FILE STATISTICS:
+----------------
+
+Source Code Files: 3
+  - uefi_integrity.h: 248 lines
+  - uefi_integrity.c: 1,149 lines
+  - test-uefi-integrity.c: 177 lines
+  Total Source: 1,574 lines
+
+Documentation Files: 4
+  - API reference (comprehensive)
+  - Implementation report (detailed)
+  - Quick reference (concise)
+  - File listing (this document)
+
+Total Files Created: 7 (+ 1 build output + 1 makefile update)
+
+INTEGRATION STATUS:
+-------------------
+
+✓ Integrated into FirmwareGuard build system
+✓ Compatible with existing modules
+✓ Follows project coding standards
+✓ Compiles with security hardening flags
+✓ Ready for production use
+
+LOCATIONS SUMMARY:
+------------------
+
+Headers:     src/detection/
+Source:      src/detection/
+Tests:       tools/
+Docs:        docs/ and root/
+Build:       build/
+Config:      Makefile
+
+All files are located within the FirmwareGuard project tree at:
+/home/zero/FirmwareGuard/
+
+==============================================================================
+End of File Listing

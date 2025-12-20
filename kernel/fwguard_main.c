@@ -54,6 +54,9 @@ static long fwguard_ioctl(struct file *file, unsigned int cmd, unsigned long arg
 {
     struct fwguard_status __user *user_status;
     struct fwguard_mmio_region region;
+    struct spi_protection_status spi_status;
+    struct spi_event_ioctl event_ioctl;
+    unsigned int poll_interval;
     int ret = 0;
 
     /* Check for required capabilities */
@@ -163,6 +166,70 @@ static long fwguard_ioctl(struct file *file, unsigned int cmd, unsigned long arg
         }
         break;
 
+    /* SPI Flash Protection Monitoring IOCTL handlers */
+    case FWGUARD_IOC_SPI_GET_STATUS:
+        /* Get current SPI protection status from monitoring subsystem */
+        ret = spi_get_status(&spi_status);
+        if (ret < 0) {
+            pr_err("fwguard: failed to get SPI status: %d\n", ret);
+            return ret;
+        }
+
+        /* Copy status to userspace */
+        if (copy_to_user((void __user *)arg, &spi_status, sizeof(spi_status))) {
+            return -EFAULT;
+        }
+        break;
+
+    case FWGUARD_IOC_SPI_START_MONITOR:
+        /* Start SPI monitoring with specified poll interval */
+        if (copy_from_user(&poll_interval, (void __user *)arg, sizeof(poll_interval))) {
+            return -EFAULT;
+        }
+
+        ret = spi_start_monitoring(poll_interval);
+        if (ret < 0) {
+            pr_err("fwguard: failed to start SPI monitoring: %d\n", ret);
+            return ret;
+        }
+
+        pr_info("fwguard: SPI monitoring started with interval %u ms\n", poll_interval);
+        break;
+
+    case FWGUARD_IOC_SPI_STOP_MONITOR:
+        /* Stop SPI monitoring */
+        spi_stop_monitoring();
+        pr_info("fwguard: SPI monitoring stopped\n");
+        break;
+
+    case FWGUARD_IOC_SPI_GET_EVENTS:
+        /* Retrieve pending SPI security events */
+        if (copy_from_user(&event_ioctl, (void __user *)arg, sizeof(event_ioctl))) {
+            return -EFAULT;
+        }
+
+        /* Validate userspace pointer */
+        if (!event_ioctl.events || event_ioctl.max_events == 0) {
+            pr_err("fwguard: invalid event buffer parameters\n");
+            return -EINVAL;
+        }
+
+        /* Retrieve events from SPI monitoring subsystem */
+        ret = spi_get_events(event_ioctl.events, event_ioctl.max_events,
+                            &event_ioctl.num_events);
+        if (ret < 0) {
+            pr_err("fwguard: failed to get SPI events: %d\n", ret);
+            return ret;
+        }
+
+        /* Copy updated count back to userspace */
+        if (copy_to_user((void __user *)arg, &event_ioctl, sizeof(event_ioctl))) {
+            return -EFAULT;
+        }
+
+        pr_debug("fwguard: retrieved %u SPI events\n", event_ioctl.num_events);
+        break;
+
     default:
         pr_warn("fwguard: unknown ioctl command: 0x%x\n", cmd);
         return -ENOTTY;
@@ -237,12 +304,31 @@ static int __init fwguard_init(void)
     pr_info("fwguard: kernel module loaded successfully\n");
     pr_info("fwguard: device node created at /dev/fwguard\n");
 
+    /* Initialize SPI flash protection monitoring subsystem
+     * This is non-fatal - module can still function for MMIO protection
+     * even if SPI monitoring fails (e.g., on non-Intel platforms)
+     */
+    ret = spi_monitor_init();
+    if (ret < 0) {
+        pr_warn("fwguard: SPI monitoring initialization failed: %d\n", ret);
+        pr_warn("fwguard: Continuing without SPI monitoring capability\n");
+        /* Don't fail module load - MMIO protection still available */
+    } else {
+        pr_info("fwguard: SPI flash protection monitoring initialized\n");
+    }
+
     return 0;
 }
 
 static void __exit fwguard_exit(void)
 {
     pr_info("fwguard: unloading kernel module\n");
+
+    /* Cleanup SPI flash protection monitoring subsystem
+     * This stops monitoring timer and releases hardware resources
+     */
+    spi_monitor_cleanup();
+    pr_info("fwguard: SPI monitoring cleaned up\n");
 
     device_destroy(fwguard_class, fwguard_dev);
     cdev_del(&fwguard_cdev);

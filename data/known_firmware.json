@@ -1,0 +1,138 @@
+{
+  "version": "1.0.0",
+  "description": "FirmwareGuard Known-Good Firmware Checksum Database",
+  "last_updated": "2025-01-01",
+  "note": "OFFLINE-ONLY: This database is maintained manually via JSON imports",
+  "firmware": [
+    {
+      "vendor": "Intel",
+      "model": "CSME",
+      "version": "11.8.50.3425",
+      "region": "me",
+      "sha256": "placeholder_hash_replace_with_actual",
+      "source": "vendor",
+      "verified": false,
+      "notes": "Intel Consumer ME 11.8 for various desktop platforms"
+    },
+    {
+      "vendor": "Intel",
+      "model": "CSME",
+      "version": "12.0.35.1275",
+      "region": "me",
+      "sha256": "placeholder_hash_replace_with_actual",
+      "source": "vendor",
+      "verified": false,
+      "notes": "Intel Consumer ME 12.0 for Coffee Lake platforms"
+    },
+    {
+      "vendor": "Intel",
+      "model": "CSME",
+      "version": "14.1.53.1649",
+      "region": "me",
+      "sha256": "placeholder_hash_replace_with_actual",
+      "source": "vendor",
+      "verified": false,
+      "notes": "Intel Consumer ME 14.1 for Comet Lake platforms"
+    },
+    {
+      "vendor": "AMD",
+      "model": "PSP",
+      "version": "0.0.0.0",
+      "region": "psp",
+      "sha256": "placeholder_hash_replace_with_actual",
+      "source": "vendor",
+      "verified": false,
+      "notes": "AMD Platform Security Processor firmware"
+    },
+    {
+      "vendor": "Lenovo",
+      "model": "ThinkPad X1 Carbon Gen 9",
+      "version": "N32ET72W (1.52)",
+      "region": "full",
+      "sha256": "placeholder_hash_replace_with_actual",
+      "source": "vendor",
+      "verified": false,
+      "notes": "Full SPI flash image"
+    },
+    {
+      "vendor": "Dell",
+      "model": "XPS 15 9510",
+      "version": "1.16.0",
+      "region": "full",
+      "sha256": "placeholder_hash_replace_with_actual",
+      "source": "vendor",
+      "verified": false,
+      "notes": "Full SPI flash image"
+    },
+    {
+      "vendor": "HP",
+      "model": "EliteBook 840 G8",
+      "version": "F.74",
+      "region": "full",
+      "sha256": "placeholder_hash_replace_with_actual",
+      "source": "vendor",
+      "verified": false,
+      "notes": "Full SPI flash image"
+    },
+    {
+      "vendor": "ASUS",
+      "model": "ROG Crosshair VIII Hero",
+      "version": "4201",
+      "region": "full",
+      "sha256": "placeholder_hash_replace_with_actual",
+      "source": "vendor",
+      "verified": false,
+      "notes": "Full SPI flash image - AMD X570"
+    },
+    {
+      "vendor": "MSI",
+      "model": "MEG Z690 ACE",
+      "version": "1.80",
+      "region": "full",
+      "sha256": "placeholder_hash_replace_with_actual",
+      "source": "vendor",
+      "verified": false,
+      "notes": "Full SPI flash image - Intel Z690"
+    },
+    {
+      "vendor": "Gigabyte",
+      "model": "Z790 AORUS Master",
+      "version": "F8",
+      "region": "full",
+      "sha256": "placeholder_hash_replace_with_actual",
+      "source": "vendor",
+      "verified": false,
+      "notes": "Full SPI flash image - Intel Z790"
+    },
+    {
+      "vendor": "Coreboot",
+      "model": "Lenovo ThinkPad X230",
+      "version": "4.19",
+      "region": "full",
+      "sha256": "placeholder_hash_replace_with_actual",
+      "source": "community",
+      "verified": false,
+      "notes": "Coreboot with neutered ME"
+    },
+    {
+      "vendor": "Coreboot",
+      "model": "Lenovo ThinkPad T440p",
+      "version": "4.19",
+      "region": "full",
+      "sha256": "placeholder_hash_replace_with_actual",
+      "source": "community",
+      "verified": false,
+      "notes": "Coreboot with neutered ME"
+    },
+    {
+      "vendor": "Libreboot",
+      "model": "Lenovo ThinkPad X200",
+      "version": "20231021",
+      "region": "full",
+      "sha256": "placeholder_hash_replace_with_actual",
+      "source": "community",
+      "verified": false,
+      "notes": "Libreboot - fully free firmware"
+    }
+  ]
+}

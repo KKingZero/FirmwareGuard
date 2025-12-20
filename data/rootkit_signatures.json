@@ -1,0 +1,32 @@
+{
+  "version": "1.0.0",
+  "description": "FirmwareGuard Custom Rootkit Signatures",
+  "last_updated": "2025-01-01",
+  "note": "OFFLINE-ONLY: Add custom signatures for local detection",
+  "signatures": [
+    {
+      "name": "Custom_UEFI_Implant_001",
+      "description": "Custom signature for UEFI implant detection",
+      "family": "generic_uefi",
+      "severity": "high",
+      "pattern_hex": "4D 5A 90 00 03 00 00 00 04 00 00 00 FF FF 00 00",
+      "mitre_attack": "T1542.001"
+    },
+    {
+      "name": "SMM_Callout_Hook",
+      "description": "SMM callout to external code pattern",
+      "family": "generic_smm",
+      "severity": "critical",
+      "pattern_hex": "48 B8 ?? ?? ?? ?? ?? ?? ?? ?? FF E0",
+      "mitre_attack": "T1542.001"
+    },
+    {
+      "name": "UEFI_Variable_Backdoor",
+      "description": "Suspicious UEFI variable manipulation pattern",
+      "family": "generic_uefi",
+      "severity": "high",
+      "pattern_hex": "53 65 63 75 72 65 42 6F 6F 74",
+      "mitre_attack": "T1542.003"
+    }
+  ]
+}

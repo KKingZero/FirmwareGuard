@@ -1,5 +1,6 @@
-# FirmwareGuard Makefile - Phase 2
-# Low-level firmware telemetry detection and active blocking framework
+# FirmwareGuard Makefile - Phase 4
+# Low-level firmware telemetry detection, analysis, and protection framework
+# OFFLINE-ONLY: No network connectivity
 
 CC = gcc
 # Security hardening flags
@@ -7,11 +8,12 @@ SECURITY_FLAGS = -fstack-protector-strong -D_FORTIFY_SOURCE=2 \
                  -Wformat -Wformat-security -fPIE \
                  -Wshadow -Wpointer-arith -Wcast-qual
 CFLAGS = -Wall -Wextra -O2 -std=gnu11 -Iinclude -D_GNU_SOURCE $(SECURITY_FLAGS)
-LDFLAGS = -lm -pie -Wl,-z,relro,-z,now -Wl,-z,noexecstack
+LDFLAGS = -lm -lsqlite3 -lssl -lcrypto -lpthread -pie -Wl,-z,relro,-z,now -Wl,-z,noexecstack
 INSTALL = install
 INSTALL_DIR = /usr/local/bin
 SYSTEMD_DIR = /etc/systemd/system
 CONFIG_DIR = /etc/firmwareguard
+DATA_DIR = /usr/share/firmwareguard
 
 # Directories
 SRC_DIR = src
@@ -25,6 +27,13 @@ UEFI_DIR = $(SRC_DIR)/uefi
 GRUB_DIR = $(SRC_DIR)/grub
 PATTERN_DIR = $(SRC_DIR)/patterns
 DETECT_DIR = $(SRC_DIR)/detection
+MIGRATE_DIR = $(SRC_DIR)/migration
+DATABASE_DIR = $(SRC_DIR)/database
+ROOTKIT_DIR = $(SRC_DIR)/rootkit
+DUMP_DIR = $(SRC_DIR)/dump
+MONITOR_DIR = $(SRC_DIR)/monitor
+INTEGRITY_DIR = $(SRC_DIR)/integrity
+GHIDRA_DIR = $(SRC_DIR)/ghidra
 KERNEL_DIR = kernel
 
 # Target binary
@@ -60,7 +69,31 @@ DETECT_SRCS = $(DETECT_DIR)/smm_detect.c \
               $(DETECT_DIR)/bootguard_detect.c \
               $(DETECT_DIR)/txt_sgx_detect.c \
               $(DETECT_DIR)/baseline_capture.c \
-              $(DETECT_DIR)/implant_detect.c
+              $(DETECT_DIR)/implant_detect.c \
+              $(DETECT_DIR)/uefi_integrity.c
+
+# Migration sources
+MIGRATE_SRCS = $(MIGRATE_DIR)/coreboot_migrate.c
+
+# Database sources (Phase 4)
+DATABASE_SRCS = $(DATABASE_DIR)/cve_db.c \
+                $(DATABASE_DIR)/threat_intel.c
+
+# Rootkit detection sources (Phase 4)
+ROOTKIT_SRCS = $(ROOTKIT_DIR)/rootkit_detect.c
+
+# Live dump sources (Phase 4)
+DUMP_SRCS = $(DUMP_DIR)/live_dump.c
+
+# Monitor sources (Phase 4)
+MONITOR_SRCS = $(MONITOR_DIR)/heci_monitor.c \
+               $(MONITOR_DIR)/spi_monitor.c
+
+# Integrity sources (Phase 4)
+INTEGRITY_SRCS = $(INTEGRITY_DIR)/checksum_db.c
+
+# Ghidra wrapper sources (Phase 4)
+GHIDRA_SRCS = $(GHIDRA_DIR)/ghidra_wrapper.c
 
 # cJSON library
 CJSON_SRC = $(SRC_DIR)/cJSON.c
@@ -70,7 +103,9 @@ MAIN_SRC = $(SRC_DIR)/main.c
 # All sources
 ALL_SRCS = $(CORE_SRCS) $(BLOCK_SRCS) $(AUDIT_SRCS) $(SAFETY_SRCS) \
            $(CONFIG_MGMT_SRCS) $(UEFI_SRCS) $(GRUB_SRCS) $(PATTERN_SRCS) \
-           $(DETECT_SRCS) $(CJSON_SRC) $(MAIN_SRC)
+           $(DETECT_SRCS) $(MIGRATE_SRCS) $(DATABASE_SRCS) $(ROOTKIT_SRCS) \
+           $(DUMP_SRCS) $(MONITOR_SRCS) $(INTEGRITY_SRCS) $(GHIDRA_SRCS) \
+           $(CJSON_SRC) $(MAIN_SRC)
 
 # Object files
 CORE_OBJS = $(patsubst $(CORE_DIR)/%.c,$(BUILD_DIR)/core_%.o,$(CORE_SRCS))
@@ -82,21 +117,43 @@ UEFI_OBJS = $(patsubst $(UEFI_DIR)/%.c,$(BUILD_DIR)/uefi_%.o,$(UEFI_SRCS))
 GRUB_OBJS = $(patsubst $(GRUB_DIR)/%.c,$(BUILD_DIR)/grub_%.o,$(GRUB_SRCS))
 PATTERN_OBJS = $(patsubst $(PATTERN_DIR)/%.c,$(BUILD_DIR)/pattern_%.o,$(PATTERN_SRCS))
 DETECT_OBJS = $(patsubst $(DETECT_DIR)/%.c,$(BUILD_DIR)/detect_%.o,$(DETECT_SRCS))
+MIGRATE_OBJS = $(patsubst $(MIGRATE_DIR)/%.c,$(BUILD_DIR)/migrate_%.o,$(MIGRATE_SRCS))
+DATABASE_OBJS = $(patsubst $(DATABASE_DIR)/%.c,$(BUILD_DIR)/database_%.o,$(DATABASE_SRCS))
+ROOTKIT_OBJS = $(patsubst $(ROOTKIT_DIR)/%.c,$(BUILD_DIR)/rootkit_%.o,$(ROOTKIT_SRCS))
+DUMP_OBJS = $(patsubst $(DUMP_DIR)/%.c,$(BUILD_DIR)/dump_%.o,$(DUMP_SRCS))
+MONITOR_OBJS = $(patsubst $(MONITOR_DIR)/%.c,$(BUILD_DIR)/monitor_%.o,$(MONITOR_SRCS))
+INTEGRITY_OBJS = $(patsubst $(INTEGRITY_DIR)/%.c,$(BUILD_DIR)/integrity_%.o,$(INTEGRITY_SRCS))
+GHIDRA_OBJS = $(patsubst $(GHIDRA_DIR)/%.c,$(BUILD_DIR)/ghidra_%.o,$(GHIDRA_SRCS))
 CJSON_OBJ = $(BUILD_DIR)/cJSON.o
 MAIN_OBJ = $(BUILD_DIR)/main.o
 
 ALL_OBJS = $(CORE_OBJS) $(BLOCK_OBJS) $(AUDIT_OBJS) $(SAFETY_OBJS) \
            $(CONFIG_MGMT_OBJS) $(UEFI_OBJS) $(GRUB_OBJS) $(PATTERN_OBJS) \
-           $(DETECT_OBJS) $(CJSON_OBJ) $(MAIN_OBJ)
+           $(DETECT_OBJS) $(MIGRATE_OBJS) $(DATABASE_OBJS) $(ROOTKIT_OBJS) \
+           $(DUMP_OBJS) $(MONITOR_OBJS) $(INTEGRITY_OBJS) $(GHIDRA_OBJS) \
+           $(CJSON_OBJ) $(MAIN_OBJ)
 
 # Default target
 .PHONY: all
 all: $(BUILD_DIR) $(TARGET) check-offline
 	@echo ""
 	@echo "========================================="
-	@echo "  FirmwareGuard v1.0.0 Build Complete"
+	@echo "  FirmwareGuard v2.0.0 Build Complete"
+	@echo "  Phase 4: Advanced Detection & Analysis"
 	@echo "========================================="
 	@echo "Binary: ./$(TARGET)"
+	@echo ""
+	@echo "Phase 4 Features:"
+	@echo "  - Ghidra scripting suite"
+	@echo "  - Supply chain checksum database"
+	@echo "  - Rootkit detection (LoJax, MoonBounce, BlackLotus, etc.)"
+	@echo "  - Live firmware memory dump"
+	@echo "  - HECI/ME traffic monitoring"
+	@echo "  - UEFI runtime integrity checks"
+	@echo "  - SPI write protection monitoring"
+	@echo "  - Coreboot migration assistant"
+	@echo "  - CVE correlation database"
+	@echo "  - Threat intelligence integration"
 	@echo ""
 	@echo "To install system-wide: sudo make install"
 	@echo "To build kernel module: make kernel"
@@ -173,6 +230,34 @@ $(BUILD_DIR)/detect_%.o: $(DETECT_DIR)/%.c
 	@echo "Compiling $<..."
 	@$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/migrate_%.o: $(MIGRATE_DIR)/%.c
+	@echo "Compiling $<..."
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/database_%.o: $(DATABASE_DIR)/%.c
+	@echo "Compiling $<..."
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/rootkit_%.o: $(ROOTKIT_DIR)/%.c
+	@echo "Compiling $<..."
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/dump_%.o: $(DUMP_DIR)/%.c
+	@echo "Compiling $<..."
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/monitor_%.o: $(MONITOR_DIR)/%.c
+	@echo "Compiling $<..."
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/integrity_%.o: $(INTEGRITY_DIR)/%.c
+	@echo "Compiling $<..."
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/ghidra_%.o: $(GHIDRA_DIR)/%.c
+	@echo "Compiling $<..."
+	@$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/cJSON.o: $(SRC_DIR)/cJSON.c
 	@echo "Compiling $<..."
 	@$(CC) $(CFLAGS) -Wno-unused-parameter -c $< -o $@
@@ -199,7 +284,7 @@ clean:
 # Install (requires root)
 .PHONY: install
 install: $(TARGET)
-	@echo "Installing FirmwareGuard Phase 2..."
+	@echo "Installing FirmwareGuard Phase 4..."
 	@echo "  Installing binary to $(INSTALL_DIR)..."
 	@$(INSTALL) -m 755 $(TARGET) $(INSTALL_DIR)/
 	@echo "  Creating configuration directory..."
@@ -207,16 +292,29 @@ install: $(TARGET)
 	@echo "  Creating state directory..."
 	@$(INSTALL) -d -m 700 /var/lib/firmwareguard
 	@$(INSTALL) -d -m 700 /var/lib/firmwareguard/backups
+	@$(INSTALL) -d -m 700 /var/lib/firmwareguard/dumps
+	@$(INSTALL) -d -m 700 /var/lib/firmwareguard/ghidra_analysis
+	@$(INSTALL) -d -m 700 /var/lib/firmwareguard/ghidra_projects
+	@echo "  Installing data files..."
+	@$(INSTALL) -d -m 755 $(DATA_DIR)
+	@$(INSTALL) -d -m 755 $(DATA_DIR)/ghidra
+	@$(INSTALL) -m 644 data/*.json $(DATA_DIR)/ 2>/dev/null || true
+	@$(INSTALL) -m 755 tools/ghidra/*.py $(DATA_DIR)/ghidra/ 2>/dev/null || true
+	@$(INSTALL) -m 755 tools/ghidra/*.sh $(DATA_DIR)/ghidra/ 2>/dev/null || true
 	@echo "  Installing systemd service..."
 	@$(INSTALL) -m 644 systemd/firmwareguard.service $(SYSTEMD_DIR)/
 	@systemctl daemon-reload
 	@echo ""
 	@echo "Installation complete!"
 	@echo ""
-	@echo "Next steps:"
-	@echo "  1. Edit configuration: $(CONFIG_DIR)/config.conf"
-	@echo "  2. Enable service: systemctl enable firmwareguard"
-	@echo "  3. Start service: systemctl start firmwareguard"
+	@echo "Phase 4 commands available:"
+	@echo "  firmwareguard rootkit-scan <firmware.bin>"
+	@echo "  firmwareguard integrity verify <firmware.bin>"
+	@echo "  firmwareguard cve-check <component> <version>"
+	@echo "  firmwareguard coreboot-check"
+	@echo "  firmwareguard dump-live --acpi --optionrom"
+	@echo "  firmwareguard heci-monitor"
+	@echo "  firmwareguard spi-status"
 	@echo ""
 	@echo "To install kernel module:"
 	@echo "  make kernel-install"
@@ -286,7 +384,7 @@ stats:
 # Help
 .PHONY: help
 help:
-	@echo "FirmwareGuard Phase 2 Build System"
+	@echo "FirmwareGuard Phase 4 Build System"
 	@echo "==================================="
 	@echo ""
 	@echo "Targets:"
@@ -308,13 +406,24 @@ help:
 	@echo "  sudo make install     # Install system-wide"
 	@echo "  make clean            # Clean build files"
 	@echo ""
-	@echo "Phase 2 Features:"
-	@echo "  - Safety framework (backup, dry-run, rollback)"
-	@echo "  - Configuration management"
-	@echo "  - UEFI variable manipulation (Intel ME HAP bit)"
-	@echo "  - GRUB configuration management (AMD PSP mitigation)"
-	@echo "  - Kernel module for MMIO/DMA protection"
-	@echo "  - Systemd service for boot-time enforcement"
+	@echo "Phase 4 Features (OFFLINE-ONLY):"
+	@echo "  - Ghidra scripting for UEFI/ME firmware analysis"
+	@echo "  - Supply chain checksum verification database"
+	@echo "  - Rootkit detection (LoJax, MosaicRegressor, MoonBounce,"
+	@echo "    CosmicStrand, BlackLotus, ESPecter)"
+	@echo "  - Live firmware memory dump (ME, SMRAM, Option ROMs)"
+	@echo "  - Intel ME/HECI traffic monitoring"
+	@echo "  - UEFI runtime integrity checking"
+	@echo "  - SPI flash write protection monitoring"
+	@echo "  - Coreboot/Libreboot migration assistant"
+	@echo "  - CVE correlation database (Intel, AMD, UEFI 2018-2025)"
+	@echo "  - Threat intelligence integration"
+	@echo ""
+	@echo "Dependencies:"
+	@echo "  - libsqlite3-dev (apt-get install libsqlite3-dev)"
+	@echo "  - libssl-dev (apt-get install libssl-dev)"
+	@echo "  - Optional: Ghidra for firmware analysis"
+	@echo "  - Optional: flashrom for SPI flash access"
 	@echo ""
 
 .PHONY: all clean install uninstall test debug kernel kernel-install check stats help

@@ -2,6 +2,10 @@
 
 obj-m += fwguard_km.o
 
+# Module consists of multiple source files
+# The module object fwguard_km.o is built from these sources
+fwguard_km-objs := fwguard_main.o spi_protect.o
+
 # Kernel build directory
 KDIR ?= /lib/modules/$(shell uname -r)/build
 

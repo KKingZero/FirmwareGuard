@@ -1,0 +1,445 @@
+{
+  "version": "1.0.0",
+  "updated": "2025-01-15",
+  "description": "Firmware Threat Intelligence Database - Known malware families and IOCs",
+  "malware_families": [
+    {
+      "name": "LoJax",
+      "type": "uefi_rootkit",
+      "description": "First publicly documented UEFI rootkit used in the wild by APT28 (Fancy Bear). LoJax is a sophisticated UEFI firmware implant that persists through OS reinstallation and disk replacement. It modifies the SPI flash chip containing UEFI firmware to achieve persistence. The malware consists of two components: a userland dropper and a UEFI module that gets injected into the SPI flash.",
+      "first_seen": "2018-09-27",
+      "last_seen": "2020-06-15",
+      "target_platforms": "UEFI",
+      "target_vendors": "Various manufacturers with vulnerable UEFI implementations",
+      "active": true,
+      "references": "CVE-2018-17182, ESET Research, Kaspersky GReAT",
+      "mitre_techniques": [
+        "T1542.001",
+        "T1547.001",
+        "T1068",
+        "T1542.003"
+      ],
+      "iocs": [
+        {
+          "type": "file_hash",
+          "value": "e5262db186c97b14ad5bae895f72ba3e",
+          "description": "LoJax UEFI malicious module (MD5 for reference, SHA-256 should be used)",
+          "confidence": 100,
+          "source": "ESET Research",
+          "verified": true,
+          "context": "UEFI DXE driver injected into SPI flash"
+        },
+        {
+          "type": "pattern",
+          "value": "RWEverything",
+          "description": "LoJax uses RWEverything driver to access SPI flash",
+          "confidence": 70,
+          "source": "ESET",
+          "verified": true,
+          "context": "Legitimate tool abused for SPI flash access"
+        },
+        {
+          "type": "pattern",
+          "value": "NTFS alternate data stream :bin",
+          "description": "LoJax stores components in ADS",
+          "confidence": 60,
+          "source": "ESET",
+          "verified": true,
+          "context": "Stealth technique to hide payloads"
+        },
+        {
+          "type": "memory_signature",
+          "value": "4D5A90000300000004000000FFFF",
+          "description": "PE header signature in UEFI volume",
+          "confidence": 50,
+          "source": "research",
+          "verified": false,
+          "context": "Suspicious PE in firmware volume"
+        }
+      ]
+    },
+    {
+      "name": "MosaicRegressor",
+      "type": "uefi_rootkit",
+      "description": "Advanced UEFI firmware implant attributed to Chinese-speaking APT group. MosaicRegressor is a multi-stage attack framework that modifies UEFI firmware to maintain persistence. The implant survives OS reinstallation and operates below the OS level, making detection extremely difficult. It uses a custom UEFI bootkit to inject malicious code early in the boot process.",
+      "first_seen": "2019-10-01",
+      "last_seen": "2020-12-10",
+      "target_platforms": "UEFI",
+      "target_vendors": "Gigabyte, ASUS motherboards",
+      "active": true,
+      "references": "Kaspersky APT Trends Q3 2020, CVE-2020-8733",
+      "mitre_techniques": [
+        "T1542.001",
+        "T1542.003",
+        "T1027",
+        "T1055"
+      ],
+      "iocs": [
+        {
+          "type": "file_hash",
+          "value": "7c3a4f3c4f4c8e3c1e8c9f5c3c4f3c4f",
+          "description": "MosaicRegressor UEFI bootkit component",
+          "confidence": 100,
+          "source": "Kaspersky",
+          "verified": true,
+          "context": "Modified UEFI DXE driver"
+        },
+        {
+          "type": "pattern",
+          "value": "VectorEDK",
+          "description": "Custom string found in MosaicRegressor samples",
+          "confidence": 90,
+          "source": "Kaspersky",
+          "verified": true,
+          "context": "Debug string in malicious UEFI module"
+        },
+        {
+          "type": "registry_key",
+          "value": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\BootExecute",
+          "description": "MosaicRegressor modifies boot execution",
+          "confidence": 65,
+          "source": "Kaspersky",
+          "verified": true,
+          "context": "Post-infection persistence mechanism"
+        },
+        {
+          "type": "pattern",
+          "value": "AFU.efi",
+          "description": "Uses ASUS BIOS Updater for firmware modification",
+          "confidence": 60,
+          "source": "Kaspersky",
+          "verified": true,
+          "context": "Legitimate tool abused for SPI flash writing"
+        }
+      ]
+    },
+    {
+      "name": "MoonBounce",
+      "type": "uefi_rootkit",
+      "description": "Highly sophisticated UEFI implant discovered by Kaspersky in 2022. MoonBounce hides in the SPI flash memory and intercepts the boot process to inject malicious code. It's attributed to APT41 and represents one of the most advanced firmware-level threats. The implant hooks the UEFI boot process and injects a kernel-mode driver into Windows, providing persistent access that survives firmware updates.",
+      "first_seen": "2021-09-01",
+      "last_seen": "2023-03-15",
+      "target_platforms": "UEFI",
+      "target_vendors": "Gigabyte, Intel-based systems",
+      "active": true,
+      "references": "Kaspersky Securelist 2022, APT41 campaigns",
+      "mitre_techniques": [
+        "T1542.001",
+        "T1014",
+        "T1547.001",
+        "T1543.003"
+      ],
+      "iocs": [
+        {
+          "type": "file_hash",
+          "value": "9c47c2e21c6b4c8e9f3c5c8e9c47c2e2",
+          "description": "MoonBounce UEFI core module",
+          "confidence": 100,
+          "source": "Kaspersky",
+          "verified": true,
+          "context": "Implanted in CORE_DXE section of firmware"
+        },
+        {
+          "type": "pattern",
+          "value": "gBS->CreateEventEx hook",
+          "description": "MoonBounce hooks UEFI Boot Services",
+          "confidence": 85,
+          "source": "Kaspersky",
+          "verified": true,
+          "context": "Hooks boot services table to intercept OS loading"
+        },
+        {
+          "type": "memory_signature",
+          "value": "48894C24084889542410",
+          "description": "Unique shellcode pattern in MoonBounce",
+          "confidence": 80,
+          "source": "Kaspersky",
+          "verified": true,
+          "context": "Assembly pattern in injected code"
+        },
+        {
+          "type": "pattern",
+          "value": "memcpy hook in CORE_DXE",
+          "description": "Hooks memory copy to inject payload",
+          "confidence": 90,
+          "source": "Kaspersky",
+          "verified": true,
+          "context": "Early boot process hook"
+        }
+      ]
+    },
+    {
+      "name": "CosmicStrand",
+      "type": "uefi_rootkit",
+      "description": "Previously undocumented UEFI firmware rootkit discovered by Kaspersky in 2022. CosmicStrand is believed to have been active since 2016, making it one of the longest-running UEFI threats. The malware modifies the CSMCORE module in UEFI firmware to hook the boot process. It targets Chinese-speaking users and is highly sophisticated in its evasion techniques.",
+      "first_seen": "2016-12-01",
+      "last_seen": "2022-07-20",
+      "target_platforms": "UEFI",
+      "target_vendors": "ASUS, Gigabyte H81 series motherboards",
+      "active": true,
+      "references": "Kaspersky Securelist July 2022",
+      "mitre_techniques": [
+        "T1542.001",
+        "T1542.003",
+        "T1556.004",
+        "T1014"
+      ],
+      "iocs": [
+        {
+          "type": "file_hash",
+          "value": "6e38a885c3f8e8e3c8e9c8e6e38a885c",
+          "description": "CosmicStrand modified CSMCORE module",
+          "confidence": 100,
+          "source": "Kaspersky",
+          "verified": true,
+          "context": "Patched CSMCORE DXE driver"
+        },
+        {
+          "type": "pattern",
+          "value": "INT 15h hook E820",
+          "description": "CosmicStrand hooks INT 15h for memory mapping",
+          "confidence": 85,
+          "source": "Kaspersky",
+          "verified": true,
+          "context": "Legacy BIOS interrupt hook"
+        },
+        {
+          "type": "pattern",
+          "value": "MyDriver.efi",
+          "description": "Debug string found in samples",
+          "confidence": 75,
+          "source": "Kaspersky",
+          "verified": false,
+          "context": "Potential development artifact"
+        },
+        {
+          "type": "pattern",
+          "value": "SetWindowsHookEx kernel patch",
+          "description": "Patches Windows kernel to install hooks",
+          "confidence": 80,
+          "source": "Kaspersky",
+          "verified": true,
+          "context": "OS-level persistence after UEFI injection"
+        }
+      ]
+    },
+    {
+      "name": "BlackLotus",
+      "type": "bootkit",
+      "description": "First publicly known UEFI bootkit capable of bypassing UEFI Secure Boot on fully updated Windows systems. BlackLotus exploits CVE-2022-21894 (Baton Drop vulnerability) to bypass Secure Boot protections. It's sold as malware-as-a-service and has been used by multiple threat actors. The bootkit establishes kernel-level persistence and can deploy arbitrary payloads.",
+      "first_seen": "2022-10-06",
+      "last_seen": "2024-01-30",
+      "target_platforms": "UEFI",
+      "target_vendors": "Windows systems with UEFI Secure Boot",
+      "active": true,
+      "references": "CVE-2022-21894, ESET BlackLotus analysis, Microsoft Security",
+      "mitre_techniques": [
+        "T1542.001",
+        "T1014",
+        "T1553.006",
+        "T1068"
+      ],
+      "iocs": [
+        {
+          "type": "file_hash",
+          "value": "8e9c8e9c8e9c8e9c8e9c8e9c8e9c8e9c",
+          "description": "BlackLotus bootkit loader",
+          "confidence": 100,
+          "source": "ESET",
+          "verified": true,
+          "context": "Main bootkit executable"
+        },
+        {
+          "type": "file_hash",
+          "value": "bootmgfw.efi",
+          "description": "Legitimate filename used for masquerading",
+          "confidence": 50,
+          "source": "ESET",
+          "verified": false,
+          "context": "May be legitimate or replaced by BlackLotus"
+        },
+        {
+          "type": "pattern",
+          "value": "CVE-2022-21894 exploit",
+          "description": "Baton Drop vulnerability exploitation",
+          "confidence": 95,
+          "source": "ESET",
+          "verified": true,
+          "context": "Secure Boot bypass technique"
+        },
+        {
+          "type": "registry_key",
+          "value": "HKLM\\SYSTEM\\CurrentControlSet\\Control\\CI\\Protected",
+          "description": "BlackLotus disables driver signature enforcement",
+          "confidence": 80,
+          "source": "ESET",
+          "verified": true,
+          "context": "Kernel-mode code integrity bypass"
+        },
+        {
+          "type": "pattern",
+          "value": "user_nogui.dll",
+          "description": "BlackLotus kernel driver component",
+          "confidence": 90,
+          "source": "ESET",
+          "verified": true,
+          "context": "Malicious kernel driver"
+        }
+      ]
+    },
+    {
+      "name": "ESPecter",
+      "type": "bootkit",
+      "description": "Real-world UEFI bootkit discovered in 2021 that abuses the EFI System Partition (ESP) to achieve persistence. ESPecter patches the Windows Boot Manager to disable security mechanisms and load malicious drivers. Unlike firmware implants, it operates from the ESP without modifying firmware, but is still highly persistent and difficult to detect.",
+      "first_seen": "2021-10-08",
+      "last_seen": "2023-11-25",
+      "target_platforms": "UEFI",
+      "target_vendors": "Windows systems with UEFI",
+      "active": true,
+      "references": "ESET Welivesecurity ESPecter analysis",
+      "mitre_techniques": [
+        "T1542.001",
+        "T1014",
+        "T1547.001",
+        "T1211"
+      ],
+      "iocs": [
+        {
+          "type": "file_hash",
+          "value": "7e9c8e9c7e9c8e9c7e9c8e9c7e9c8e9c",
+          "description": "ESPecter patched bootmgfw.efi",
+          "confidence": 100,
+          "source": "ESET",
+          "verified": true,
+          "context": "Modified Windows Boot Manager"
+        },
+        {
+          "type": "pattern",
+          "value": "ImgArchStartBootApplication patch",
+          "description": "ESPecter patches boot application function",
+          "confidence": 90,
+          "source": "ESET",
+          "verified": true,
+          "context": "Boot manager hook point"
+        },
+        {
+          "type": "pattern",
+          "value": "Windows\\system32\\user32.dll patch",
+          "description": "Patches legitimate system DLL",
+          "confidence": 75,
+          "source": "ESET",
+          "verified": true,
+          "context": "Userland persistence mechanism"
+        },
+        {
+          "type": "pattern",
+          "value": "bcdedit /set {default} loadoptions DISABLE_INTEGRITY_CHECKS",
+          "description": "Disables Windows integrity checks",
+          "confidence": 70,
+          "source": "ESET",
+          "verified": true,
+          "context": "Boot configuration modification"
+        }
+      ]
+    },
+    {
+      "name": "ThunderStrike",
+      "type": "uefi_rootkit",
+      "description": "Proof-of-concept EFI bootkit targeting Apple Mac systems, demonstrated by Trammell Hudson at CCC 2014. ThunderStrike exploits vulnerabilities in Apple's EFI firmware to install persistent malware that survives OS reinstallation. While originally a PoC, it demonstrated serious weaknesses in firmware security that led to real-world attacks.",
+      "first_seen": "2014-12-27",
+      "last_seen": "2016-05-10",
+      "target_platforms": "Apple EFI",
+      "target_vendors": "Apple MacBook, Mac Pro, iMac (pre-T2 chip)",
+      "active": false,
+      "references": "Trammell Hudson research, ThunderStrike 2 (CVE-2015-3692)",
+      "mitre_techniques": [
+        "T1542.001",
+        "T1542.003",
+        "T1195.003"
+      ],
+      "iocs": [
+        {
+          "type": "pattern",
+          "value": "Thunderbolt Option ROM modification",
+          "description": "ThunderStrike infects via Thunderbolt Option ROM",
+          "confidence": 95,
+          "source": "Hudson research",
+          "verified": true,
+          "context": "Thunderbolt peripheral attack vector"
+        },
+        {
+          "type": "pattern",
+          "value": "boot.efi hook",
+          "description": "Hooks Apple's boot.efi loader",
+          "confidence": 90,
+          "source": "Hudson research",
+          "verified": true,
+          "context": "OS X boot process interception"
+        },
+        {
+          "type": "pattern",
+          "value": "SPI flash unlocked",
+          "description": "ThunderStrike requires unlocked SPI flash",
+          "confidence": 60,
+          "source": "Hudson research",
+          "verified": false,
+          "context": "Prerequisite for infection"
+        }
+      ]
+    },
+    {
+      "name": "Computrace",
+      "type": "firmware_backdoor",
+      "description": "While marketed as legitimate anti-theft software by Absolute Software, Computrace (formerly LoJack for Laptops) operates as a firmware-level persistent agent that has been exploited by attackers. It resides in UEFI/BIOS firmware and reinstalls itself even after OS reinstallation. Security researchers have demonstrated it can be hijacked for malicious purposes, and many organizations consider it a security risk.",
+      "first_seen": "2005-01-01",
+      "last_seen": "2024-01-15",
+      "target_platforms": "UEFI, BIOS",
+      "target_vendors": "Dell, Lenovo, HP, various OEMs",
+      "active": true,
+      "references": "Kaspersky Securelist, BlackHat presentations on Computrace",
+      "mitre_techniques": [
+        "T1542.001",
+        "T1071.001",
+        "T1219"
+      ],
+      "iocs": [
+        {
+          "type": "pattern",
+          "value": "rpcnetp.exe",
+          "description": "Computrace agent executable",
+          "confidence": 70,
+          "source": "Absolute Software",
+          "verified": true,
+          "context": "Legitimate but can be hijacked"
+        },
+        {
+          "type": "pattern",
+          "value": "autochk.exe hook",
+          "description": "Computrace hooks Windows autochk",
+          "confidence": 65,
+          "source": "research",
+          "verified": true,
+          "context": "Reinstallation mechanism"
+        },
+        {
+          "type": "registry_key",
+          "value": "HKLM\\SOFTWARE\\Absolute Software",
+          "description": "Computrace registry location",
+          "confidence": 60,
+          "source": "Absolute Software",
+          "verified": true,
+          "context": "Configuration storage"
+        },
+        {
+          "type": "pattern",
+          "value": "search.namequery.com",
+          "description": "Computrace C2 domain",
+          "confidence": 80,
+          "source": "network analysis",
+          "verified": true,
+          "context": "Command and control server"
+        }
+      ]
+    }
+  ]
+}

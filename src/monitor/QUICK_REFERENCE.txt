@@ -1,0 +1,199 @@
+╔══════════════════════════════════════════════════════════════════════════╗
+║                  HECI MONITOR - QUICK REFERENCE CARD                     ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+LOCATION: /home/zero/FirmwareGuard/src/monitor/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚡ QUICK BUILD & RUN
+
+  cd /home/zero/FirmwareGuard/src/monitor
+  make
+  sudo ./heci_test 30
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 FILES OVERVIEW
+
+  heci_monitor.h          - Public API (include this in your code)
+  heci_monitor.c          - Implementation (link heci_monitor.o)
+  heci_test.c             - Example test program
+  Makefile                - Build automation
+  README.md               - User documentation
+  HECI_API.md             - Complete API reference
+  SECURITY_ANALYSIS.md    - Security deep dive & reverse engineering
+  IMPLEMENTATION_SUMMARY.md - Complete implementation summary
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔧 ESSENTIAL API
+
+  #include "monitor/heci_monitor.h"
+
+  heci_init();                      /* Initialize (requires root) */
+  heci_start_monitor(true);         /* Start monitoring + patterns */
+  sleep(60);                        /* Monitor for 60 seconds */
+  heci_stop_monitor();              /* Stop gracefully */
+  
+  heci_log_t log;
+  heci_get_log(&log);               /* Get captured traffic */
+  heci_print_summary(&log);         /* Display summary */
+  heci_export_log_json(&log, "/tmp/heci.json");  /* Export */
+  
+  heci_cleanup();                   /* Release resources */
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 WHAT IT DETECTS
+
+  CRITICAL: HMRFPO_ENABLE (flash protection override)
+  HIGH:     HMRFPO_LOCK (flash lock)
+  HIGH:     ME_UNCONFIGURE (HAP/AltDisable)
+  MEDIUM:   Excessive traffic (>100 msg/sec)
+  LOW:      Unknown MKHI groups (fuzzing)
+  LOW:      Failed authentication
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 MKHI GROUPS (Common)
+
+  0x00 - BUP (Bring-Up Platform)
+  0x02 - PM (Power Management)
+  0x03 - FWCAPS (Firmware Capabilities)
+  0x05 - HMRFPO (Flash Protection Override) ⚠️ DANGEROUS
+  0x0A - MCA (Memory Configuration)
+  0xFF - GEN (General/Common)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🛡️ OPSEC FEATURES
+
+  • Offline-only (no network)
+  • Local logging (no remote telemetry)
+  • File permissions: 0600
+  • Fixed memory (no heap forensics)
+  • Circular buffers (auto-cleanup)
+  • <1% CPU overhead
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚙️ REQUIREMENTS
+
+  • Intel platform with ME
+  • Linux with MEI driver (modprobe mei_me)
+  • /dev/mei0 or /dev/mei exists
+  • Root privileges
+  • pthread library
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔍 ANALYZE LOGS
+
+  # View JSON log
+  cat /tmp/heci_traffic.json | jq .
+
+  # Extract alerts
+  jq '.heci_monitor_log.alerts' /tmp/heci_traffic.json
+
+  # Count by group
+  jq '.heci_monitor_log.messages_by_group' /tmp/heci_traffic.json
+
+  # High-risk alerts only
+  jq '.heci_monitor_log.alerts[] | select(.risk_level >= 3)' /tmp/heci_traffic.json
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📖 DOCUMENTATION MAP
+
+  Quick start        → README.md
+  API reference      → HECI_API.md
+  Security analysis  → SECURITY_ANALYSIS.md
+  Implementation     → IMPLEMENTATION_SUMMARY.md
+  Code reference     → heci_monitor.h (inline comments)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🚨 CRITICAL ALERTS - INCIDENT RESPONSE
+
+  HMRFPO_ENABLE detected:
+    1. STOP - potential firmware implant attempt
+    2. Verify: Is BIOS update in progress?
+    3. If NO → System may be compromised
+    4. Dump firmware: use dump/live_dump module
+    5. Compare against known-good baseline
+    6. Investigate: Check recent root access logs
+
+  ME_UNCONFIGURE detected:
+    1. Verify: Is this intentional (HAP mode)?
+    2. Check policy: Should ME be disabled?
+    3. If unexpected → Possible attack evasion
+    4. Correlate with other firmware events
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔬 REVERSE ENGINEERING NOTES
+
+  MKHI Header: 8 bytes
+    [0] group_id      - Command group
+    [1] command       - Command ID
+    [2] is_response   - 0=request, 1=response
+    [3] reserved      - Always 0
+    [4] result        - Result code (responses)
+    [5-7] reserved2   - Always 0
+
+  Payload: 0-4096 bytes (command-specific)
+
+  Discovery methods:
+    • Static analysis (Ghidra/IDA on ME firmware)
+    • Dynamic analysis (strace on MEInfo)
+    • Public research (me_cleaner, intelmetool)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 INTEGRATION EXAMPLE
+
+  /* In FirmwareGuard main.c */
+  #include "monitor/heci_monitor.h"
+
+  int main(void) {
+      /* Initialize all modules */
+      msr_init();
+      acpi_init();
+      heci_init();  /* Add HECI monitor */
+
+      /* Start background monitoring */
+      heci_start_monitor(true);  /* Enable pattern detection */
+
+      /* Main loop */
+      while (running) {
+          /* ... other FirmwareGuard tasks ... */
+
+          /* Periodically check for alerts */
+          heci_log_t log;
+          heci_get_log(&log);
+          
+          if (log.alert_count > 0) {
+              /* Process alerts */
+              for (size_t i = 0; i < log.alert_count; i++) {
+                  fg_handle_alert(&log.alerts[i]);
+              }
+          }
+
+          sleep(10);
+      }
+
+      /* Cleanup on exit */
+      heci_stop_monitor();
+      heci_cleanup();
+      return 0;
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ STATUS: COMPLETE AND READY FOR TESTING
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Last Updated: 2025-12-19
+Version: 1.0
