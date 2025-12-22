@@ -34,6 +34,7 @@ DUMP_DIR = $(SRC_DIR)/dump
 MONITOR_DIR = $(SRC_DIR)/monitor
 INTEGRITY_DIR = $(SRC_DIR)/integrity
 GHIDRA_DIR = $(SRC_DIR)/ghidra
+COMPLIANCE_DIR = $(SRC_DIR)/compliance
 KERNEL_DIR = kernel
 
 # Target binary
@@ -95,6 +96,10 @@ INTEGRITY_SRCS = $(INTEGRITY_DIR)/checksum_db.c
 # Ghidra wrapper sources (Phase 4)
 GHIDRA_SRCS = $(GHIDRA_DIR)/ghidra_wrapper.c
 
+# Compliance sources (Phase 4)
+COMPLIANCE_SRCS = $(COMPLIANCE_DIR)/compliance.c \
+                  $(COMPLIANCE_DIR)/nist_800_171.c
+
 # cJSON library
 CJSON_SRC = $(SRC_DIR)/cJSON.c
 
@@ -105,7 +110,7 @@ ALL_SRCS = $(CORE_SRCS) $(BLOCK_SRCS) $(AUDIT_SRCS) $(SAFETY_SRCS) \
            $(CONFIG_MGMT_SRCS) $(UEFI_SRCS) $(GRUB_SRCS) $(PATTERN_SRCS) \
            $(DETECT_SRCS) $(MIGRATE_SRCS) $(DATABASE_SRCS) $(ROOTKIT_SRCS) \
            $(DUMP_SRCS) $(MONITOR_SRCS) $(INTEGRITY_SRCS) $(GHIDRA_SRCS) \
-           $(CJSON_SRC) $(MAIN_SRC)
+           $(COMPLIANCE_SRCS) $(CJSON_SRC) $(MAIN_SRC)
 
 # Object files
 CORE_OBJS = $(patsubst $(CORE_DIR)/%.c,$(BUILD_DIR)/core_%.o,$(CORE_SRCS))
@@ -124,6 +129,7 @@ DUMP_OBJS = $(patsubst $(DUMP_DIR)/%.c,$(BUILD_DIR)/dump_%.o,$(DUMP_SRCS))
 MONITOR_OBJS = $(patsubst $(MONITOR_DIR)/%.c,$(BUILD_DIR)/monitor_%.o,$(MONITOR_SRCS))
 INTEGRITY_OBJS = $(patsubst $(INTEGRITY_DIR)/%.c,$(BUILD_DIR)/integrity_%.o,$(INTEGRITY_SRCS))
 GHIDRA_OBJS = $(patsubst $(GHIDRA_DIR)/%.c,$(BUILD_DIR)/ghidra_%.o,$(GHIDRA_SRCS))
+COMPLIANCE_OBJS = $(patsubst $(COMPLIANCE_DIR)/%.c,$(BUILD_DIR)/compliance_%.o,$(COMPLIANCE_SRCS))
 CJSON_OBJ = $(BUILD_DIR)/cJSON.o
 MAIN_OBJ = $(BUILD_DIR)/main.o
 
@@ -131,7 +137,7 @@ ALL_OBJS = $(CORE_OBJS) $(BLOCK_OBJS) $(AUDIT_OBJS) $(SAFETY_OBJS) \
            $(CONFIG_MGMT_OBJS) $(UEFI_OBJS) $(GRUB_OBJS) $(PATTERN_OBJS) \
            $(DETECT_OBJS) $(MIGRATE_OBJS) $(DATABASE_OBJS) $(ROOTKIT_OBJS) \
            $(DUMP_OBJS) $(MONITOR_OBJS) $(INTEGRITY_OBJS) $(GHIDRA_OBJS) \
-           $(CJSON_OBJ) $(MAIN_OBJ)
+           $(COMPLIANCE_OBJS) $(CJSON_OBJ) $(MAIN_OBJ)
 
 # Default target
 .PHONY: all
@@ -255,6 +261,10 @@ $(BUILD_DIR)/integrity_%.o: $(INTEGRITY_DIR)/%.c
 	@$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/ghidra_%.o: $(GHIDRA_DIR)/%.c
+	@echo "Compiling $<..."
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/compliance_%.o: $(COMPLIANCE_DIR)/%.c
 	@echo "Compiling $<..."
 	@$(CC) $(CFLAGS) -c $< -o $@
 

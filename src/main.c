@@ -7,6 +7,7 @@
 #include "detection/txt_sgx_detect.h"
 #include "detection/baseline_capture.h"
 #include "detection/implant_detect.h"
+#include "compliance/compliance.h"
 #include <getopt.h>
 
 static void print_usage(const char *prog_name) {
@@ -33,6 +34,7 @@ static void print_usage(const char *prog_name) {
     printf("  baseline-capture  Capture comprehensive system baseline snapshot\n");
     printf("  baseline-compare  Compare current state against saved baseline\n");
     printf("  implant-scan      Full hardware implant detection scan\n");
+    printf("  compliance        Assess compliance against security frameworks\n");
     printf("\n");
     printf("Options:\n");
     printf("  -j, --json       Output in JSON format\n");
@@ -807,6 +809,81 @@ static int cmd_implant_scan(int argc, char **argv, bool json_output, bool verbos
     return FG_SUCCESS;
 }
 
+static int cmd_compliance(int argc, char **argv, bool json_output, const char *output_file) {
+    compliance_result_t result;
+    FILE *output = stdout;
+    int ret;
+
+    /* Initialize compliance subsystem */
+    ret = compliance_init();
+    if (ret != FG_SUCCESS) {
+        FG_LOG_ERROR("Failed to initialize compliance subsystem");
+        return ret;
+    }
+
+    /* Perform compliance assessment (defaults to NIST 800-171) */
+    FG_INFO("Assessing compliance against NIST 800-171...");
+    ret = compliance_assess(FRAMEWORK_NIST_800_171, &result);
+    if (ret != FG_SUCCESS) {
+        FG_LOG_ERROR("Compliance assessment failed");
+        compliance_cleanup();
+        return ret;
+    }
+
+    /* Open output file if specified */
+    if (output_file) {
+        output = fopen(output_file, "w");
+        if (!output) {
+            FG_LOG_ERROR("Failed to open output file: %s", output_file);
+            compliance_cleanup();
+            return FG_ERROR;
+        }
+    }
+
+    /* Generate output */
+    if (json_output) {
+        /* 256KB buffer for worst-case JSON output */
+        char *json_buffer = malloc(262144);
+        if (!json_buffer) {
+            FG_LOG_ERROR("Failed to allocate JSON buffer");
+            if (output != stdout) fclose(output);
+            compliance_cleanup();
+            return FG_ERROR;
+        }
+        if (compliance_result_to_json(&result, json_buffer, 262144) == FG_SUCCESS) {
+            fprintf(output, "%s\n", json_buffer);
+        } else {
+            FG_LOG_ERROR("Failed to generate JSON report");
+        }
+        free(json_buffer);
+    } else {
+        /*
+         * Note: For file output, we redirect stdout temporarily.
+         * This is not ideal for multi-threaded environments but
+         * FirmwareGuard is single-threaded by design.
+         */
+        if (output != stdout) {
+            FILE *old_stdout = stdout;
+            stdout = output;
+            compliance_print_result(&result, true);
+            fflush(stdout);
+            stdout = old_stdout;
+        } else {
+            compliance_print_result(&result, true);
+        }
+    }
+
+    if (output != stdout) {
+        fclose(output);
+        FG_INFO("Report written to: %s", output_file);
+    }
+
+    /* Cleanup */
+    compliance_cleanup();
+
+    return FG_SUCCESS;
+}
+
 int main(int argc, char **argv) {
     int opt;
     bool json_output = false;
@@ -893,6 +970,8 @@ int main(int argc, char **argv) {
         return cmd_baseline_compare(argc, argv, json_output, verbose, output_file);
     } else if (strcmp(command, "implant-scan") == 0) {
         return cmd_implant_scan(argc, argv, json_output, verbose);
+    } else if (strcmp(command, "compliance") == 0) {
+        return cmd_compliance(argc, argv, json_output, output_file);
     } else {
         FG_LOG_ERROR("Unknown command: %s", command);
         print_usage(argv[0]);
