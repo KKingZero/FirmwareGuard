@@ -1,0 +1,34 @@
+# FirmwareGuard Test Container (Fedora)
+#
+# Builds and runs the safety + UEFI safety tests in an isolated
+# environment. Works with podman or docker.
+#
+# Usage:
+#   podman build -t fg-test -f tools/Containerfile.test .
+#   podman run --rm fg-test
+#
+# For systems with UEFI (passes /sys/firmware/efi into container):
+#   podman run --rm -v /sys/firmware/efi:/sys/firmware/efi:ro fg-test
+#
+
+FROM fedora:latest
+
+# Install build dependencies (Fedora package names)
+RUN dnf install -y \
+    gcc \
+    make \
+    openssl-devel \
+    && dnf clean all
+
+# Copy source tree
+WORKDIR /build
+COPY include/ include/
+COPY src/safety/ src/safety/
+COPY src/uefi/ src/uefi/
+COPY tools/test-safety-hash.c tools/
+COPY tools/test-uefi-safety.c tools/
+COPY tools/run-tests.sh tools/
+
+RUN mkdir -p build && chmod +x tools/run-tests.sh
+
+CMD ["tools/run-tests.sh"]

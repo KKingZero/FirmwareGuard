@@ -278,6 +278,12 @@ int uefi_delete_variable(safety_context_t *safety_ctx,
         return FG_ERROR;
     }
 
+    /* Check Secure Boot compatibility before attempting deletion */
+    if (!uefi_can_modify_vars_with_secureboot()) {
+        FG_LOG_ERROR("UEFI variable deletion blocked: Secure Boot is enabled");
+        return FG_NO_PERMISSION;
+    }
+
     /* Dry-run mode */
     if (safety_ctx && safety_is_dry_run(safety_ctx)) {
         FG_INFO("[DRY-RUN] Would delete UEFI variable: %s-%s", name, guid);
@@ -403,6 +409,11 @@ int uefi_list_variables(FILE *output) {
 bool uefi_is_me_hap_available(void) {
     uefi_variable_t var;
 
+    /* Check platform support first to avoid false positives on pre-Skylake */
+    if (!uefi_check_hap_platform_support()) {
+        return false;
+    }
+
     /* Try to read ME-related UEFI variables */
     /* This is vendor-specific; common names include: */
     /* - MeSetup, MEBx, IntelAMT, etc. */
@@ -441,6 +452,75 @@ int uefi_parse_me_hap_variable(const uefi_variable_t *var, bool *hap_enabled) {
     return FG_ERROR;
 }
 
+bool uefi_check_hap_platform_support(void) {
+    FILE *fp;
+    char line[256];
+    char vendor[64] = {0};
+    int cpu_family = -1;
+    int cpu_model = -1;
+
+    fp = fopen("/proc/cpuinfo", "r");
+    if (!fp) {
+        FG_LOG_ERROR("Failed to open /proc/cpuinfo: %s", strerror(errno));
+        return false;
+    }
+
+    while (fgets(line, sizeof(line), fp)) {
+        if (strncmp(line, "vendor_id", 9) == 0) {
+            char *colon = strchr(line, ':');
+            if (colon) {
+                colon++;
+                while (*colon == ' ' || *colon == '\t') colon++;
+                char *nl = strchr(colon, '\n');
+                if (nl) *nl = '\0';
+                strncpy(vendor, colon, sizeof(vendor) - 1);
+            }
+        } else if (strncmp(line, "cpu family", 10) == 0) {
+            char *colon = strchr(line, ':');
+            if (colon) {
+                cpu_family = atoi(colon + 1);
+            }
+        } else if (strncmp(line, "model\t", 6) == 0) {
+            char *colon = strchr(line, ':');
+            if (colon) {
+                cpu_model = atoi(colon + 1);
+            }
+        }
+
+        /* Stop after first CPU core — all cores share the same model */
+        if (vendor[0] && cpu_family >= 0 && cpu_model >= 0)
+            break;
+    }
+
+    fclose(fp);
+
+    if (!vendor[0] || cpu_family < 0 || cpu_model < 0) {
+        FG_LOG_ERROR("Failed to parse CPU info from /proc/cpuinfo");
+        return false;
+    }
+
+    /* HAP is Intel-only */
+    if (strcmp(vendor, "GenuineIntel") != 0) {
+        FG_LOG_ERROR("HAP bit is Intel-only (detected vendor: %s)", vendor);
+        return false;
+    }
+
+    /* Require Family 6, Model >= 0x4E (Skylake and newer)
+     * Models below 0x4E are pre-Skylake:
+     *   Broadwell = 0x3D/0x47, Haswell = 0x3C/0x45/0x46
+     * Skylake client = 0x4E/0x5E — earliest HAP-supporting platform
+     */
+    if (cpu_family != 6 || cpu_model < 0x4E) {
+        FG_LOG_ERROR("HAP bit requires Intel Skylake or newer "
+                     "(detected: family %d, model 0x%02X)", cpu_family, cpu_model);
+        return false;
+    }
+
+    FG_DEBUG("Platform supports HAP (Intel family %d, model 0x%02X)",
+             cpu_family, cpu_model);
+    return true;
+}
+
 int uefi_set_me_hap_bit(safety_context_t *safety_ctx, bool enable) {
     uefi_variable_t var;
     uint8_t *new_data;
@@ -452,16 +532,20 @@ int uefi_set_me_hap_bit(safety_context_t *safety_ctx, bool enable) {
         return FG_ERROR;
     }
 
-    /* PHASE 3: Check HAP platform support before attempting
-     * This prevents bricking systems that don't support HAP
-     */
-    /* Note: We need to include me_psp.h and call the check, but to avoid
-     * circular dependencies, we'll do a basic platform check here
-     */
+    /* Validate platform supports HAP before proceeding */
+    if (!uefi_check_hap_platform_support()) {
+        FG_LOG_ERROR("HAP bit modification aborted: unsupported platform");
+        return FG_NOT_SUPPORTED;
+    }
+
+    /* Check Secure Boot early — fail before the scary confirmation dialog */
+    if (uefi_is_secure_boot_enabled()) {
+        FG_LOG_ERROR("HAP bit modification blocked: Secure Boot is enabled");
+        FG_LOG_ERROR("Disable Secure Boot in BIOS/UEFI settings before modifying ME HAP bit");
+        return FG_NO_PERMISSION;
+    }
+
     FG_WARN("HAP bit modification is a CRITICAL operation");
-    FG_WARN("Ensure your platform supports HAP before proceeding");
-    FG_WARN("Supported: Intel Skylake (6th gen) and newer");
-    FG_WARN("Unsupported: Older Intel platforms, most consumer boards");
 
     /* Check if user confirmation is required */
     if (safety_ctx->require_confirmation) {
@@ -548,8 +632,11 @@ bool uefi_is_secure_boot_enabled(void) {
     if (uefi_read_variable("SecureBoot", EFI_GLOBAL_VARIABLE_GUID, &var) == FG_SUCCESS) {
         if (var.data_size >= 1 && var.data) {
             enabled = (var.data[0] == 1);
+            FG_DEBUG("Secure Boot variable found: %s", enabled ? "enabled" : "disabled");
         }
         uefi_free_variable(&var);
+    } else {
+        FG_DEBUG("SecureBoot UEFI variable not found (system may not support Secure Boot)");
     }
 
     return enabled;

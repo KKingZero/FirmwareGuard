@@ -85,6 +85,9 @@ int uefi_set_me_hap_bit(safety_context_t *safety_ctx, bool enable);
 /* Check if Intel ME HAP is available */
 bool uefi_is_me_hap_available(void);
 
+/* Check if current CPU platform supports HAP bit modification */
+bool uefi_check_hap_platform_support(void);
+
 /* Secure Boot detection - PHASE 3 */
 bool uefi_is_secure_boot_enabled(void);
 

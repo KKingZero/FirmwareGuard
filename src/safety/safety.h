@@ -26,7 +26,8 @@ typedef struct {
     char name[256];
     char backup_path[512];
     time_t timestamp;
-    uint32_t checksum;
+    uint8_t checksum[32];
+    uint8_t checksum_version;
     bool valid;
 } backup_entry_t;
 
@@ -97,7 +98,7 @@ void safety_log_operation(safety_context_t *ctx, const char *operation,
                          bool success, const char *details);
 
 /* Calculate checksum for data */
-uint32_t safety_calculate_checksum(const void *data, size_t size);
+int safety_calculate_hash(const void *data, size_t size, uint8_t hash_out[32]);
 
 /* Check if running in dry-run mode */
 static inline bool safety_is_dry_run(const safety_context_t *ctx) {

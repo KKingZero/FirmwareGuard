@@ -4,6 +4,7 @@
 #include <dirent.h>
 #include <limits.h>
 #include <ctype.h>
+#include <openssl/evp.h>
 
 /* Default backup directory */
 #define BACKUP_DIR "/var/lib/firmwareguard/backups"
@@ -118,27 +119,48 @@ int safety_create_backup_dir(safety_context_t *ctx) {
     return FG_SUCCESS;
 }
 
-uint32_t safety_calculate_checksum(const void *data, size_t size) {
-    const uint8_t *bytes = (const uint8_t *)data;
-    uint32_t checksum = 0;
+int safety_calculate_hash(const void *data, size_t size, uint8_t hash_out[32]) {
+    EVP_MD_CTX *ctx;
+    unsigned int hash_len = 0;
+    int ret = FG_ERROR;
 
-    if (!data || size == 0) {
-        return 0;
+    if (!data || size == 0 || !hash_out) {
+        return FG_ERROR;
     }
 
     /* Enforce maximum size to prevent CPU DoS */
     if (size > MAX_CHECKSUM_SIZE) {
-        FG_WARN("Data too large for checksum: %zu bytes (max: %zu), truncating",
+        FG_WARN("Data too large for hash: %zu bytes (max: %zu), truncating",
                 size, (size_t)MAX_CHECKSUM_SIZE);
         size = MAX_CHECKSUM_SIZE;
     }
 
-    /* Simple CRC32-like checksum */
-    for (size_t i = 0; i < size; i++) {
-        checksum = (checksum << 5) + checksum + bytes[i];
+    ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        FG_LOG_ERROR("EVP_MD_CTX_new failed");
+        return FG_ERROR;
     }
 
-    return checksum;
+    if (EVP_DigestInit_ex(ctx, EVP_sha256(), NULL) != 1) {
+        FG_LOG_ERROR("EVP_DigestInit_ex failed");
+        goto cleanup;
+    }
+
+    if (EVP_DigestUpdate(ctx, data, size) != 1) {
+        FG_LOG_ERROR("EVP_DigestUpdate failed");
+        goto cleanup;
+    }
+
+    if (EVP_DigestFinal_ex(ctx, hash_out, &hash_len) != 1) {
+        FG_LOG_ERROR("EVP_DigestFinal_ex failed");
+        goto cleanup;
+    }
+
+    ret = FG_SUCCESS;
+
+cleanup:
+    EVP_MD_CTX_free(ctx);
+    return ret;
 }
 
 int safety_create_backup(safety_context_t *ctx, backup_type_t type,
@@ -178,7 +200,7 @@ int safety_create_backup(safety_context_t *ctx, backup_type_t type,
     entry->type = type;
     strncpy(entry->name, name, sizeof(entry->name) - 1);
     entry->timestamp = time(NULL);
-    entry->checksum = safety_calculate_checksum(data, size);
+    safety_calculate_hash(data, size, entry->checksum);
 
     /* Format timestamp for filename */
     struct tm tm_buf;
@@ -231,7 +253,12 @@ int safety_create_backup(safety_context_t *ctx, backup_type_t type,
     entry->valid = true;
     ctx->registry.num_backups++;
 
-    FG_INFO("Created backup: %s (checksum: 0x%08x)", entry->backup_path, entry->checksum);
+    {
+        char hex[65];
+        for (int i = 0; i < 32; i++)
+            snprintf(hex + i * 2, 3, "%02x", entry->checksum[i]);
+        FG_INFO("Created backup: %s (sha256: %s)", entry->backup_path, hex);
+    }
     safety_log_operation(ctx, "backup_created", true, entry->backup_path);
 
     return FG_SUCCESS;
@@ -241,7 +268,7 @@ int safety_restore_backup(safety_context_t *ctx, const backup_entry_t *backup) {
     FILE *fp;
     void *data = NULL;
     size_t size;
-    uint32_t checksum;
+    uint8_t computed_hash[32];
     struct stat st;
     int ret = FG_ERROR;
 
@@ -299,11 +326,14 @@ int safety_restore_backup(safety_context_t *ctx, const backup_entry_t *backup) {
 
     fclose(fp);
 
-    /* Verify checksum */
-    checksum = safety_calculate_checksum(data, size);
-    if (checksum != backup->checksum) {
-        FG_LOG_ERROR("Backup checksum mismatch (expected: 0x%08x, got: 0x%08x)",
-                    backup->checksum, checksum);
+    /* Verify hash */
+    if (safety_calculate_hash(data, size, computed_hash) != FG_SUCCESS) {
+        FG_LOG_ERROR("Failed to compute hash for backup verification");
+        free(data);
+        return FG_ERROR;
+    }
+    if (memcmp(computed_hash, backup->checksum, 32) != 0) {
+        FG_LOG_ERROR("Backup SHA-256 hash mismatch for: %s", backup->name);
         free(data);
         return FG_ERROR;
     }
@@ -404,7 +434,7 @@ bool safety_verify_backup(const backup_entry_t *backup) {
     FILE *fp;
     struct stat st;
     void *data;
-    uint32_t checksum;
+    uint8_t computed_hash[32];
     bool valid = false;
 
     if (!backup || !backup->valid) {
@@ -429,8 +459,9 @@ bool safety_verify_backup(const backup_entry_t *backup) {
     }
 
     if (fread(data, 1, st.st_size, fp) == (size_t)st.st_size) {
-        checksum = safety_calculate_checksum(data, st.st_size);
-        valid = (checksum == backup->checksum);
+        if (safety_calculate_hash(data, st.st_size, computed_hash) == FG_SUCCESS) {
+            valid = (memcmp(computed_hash, backup->checksum, 32) == 0);
+        }
     }
 
     free(data);
@@ -672,7 +703,12 @@ int safety_list_backups(const safety_context_t *ctx, FILE *output) {
         fprintf(output, "    Type:     %d\n", entry->type);
         fprintf(output, "    Created:  %s\n", timestamp);
         fprintf(output, "    Path:     %s\n", entry->backup_path);
-        fprintf(output, "    Checksum: 0x%08x\n", entry->checksum);
+        {
+            char hex[65];
+            for (int j = 0; j < 32; j++)
+                snprintf(hex + j * 2, 3, "%02x", entry->checksum[j]);
+            fprintf(output, "    SHA-256:  %s\n", hex);
+        }
         fprintf(output, "    Valid:    %s\n", entry->valid ? "Yes" : "No");
         fprintf(output, "\n");
     }
