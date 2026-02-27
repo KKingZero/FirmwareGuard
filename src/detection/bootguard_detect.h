@@ -2,7 +2,7 @@
 #define FG_BOOTGUARD_DETECT_H
 
 #include "../../include/firmwareguard.h"
-#include "../core/msr.h"
+#include "msr.h"
 
 /* Boot Guard MSR addresses */
 #define MSR_BOOT_GUARD_SACM_INFO    0x0000013A  /* SACM INFO MSR */

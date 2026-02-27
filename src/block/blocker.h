@@ -1,7 +1,9 @@
 #ifndef FG_BLOCKER_H
 #define FG_BLOCKER_H
 
-#include "../core/probe.h"
+#include <stdbool.h>
+#include "probe.h"
+#include "firmwareguard.h"
 
 /* Blocking action types */
 typedef enum {

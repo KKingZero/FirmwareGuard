@@ -2,7 +2,7 @@
 #define FG_SMM_DETECT_H
 
 #include "../../include/firmwareguard.h"
-#include "../core/msr.h"
+#include "msr.h"
 
 /* SMM-related MSR addresses */
 #define MSR_SMBASE                  0x0000009E  /* SMM Base Address */

@@ -1,4 +1,5 @@
-#include "msr.h"
+#include "../include/msr.h"
+#include "../include/firmwareguard.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>

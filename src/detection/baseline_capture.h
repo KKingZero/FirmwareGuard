@@ -2,6 +2,7 @@
 #define FG_BASELINE_CAPTURE_H
 
 #include "../../include/firmwareguard.h"
+#include "msr.h"
 #include "smm_detect.h"
 #include "bootguard_detect.h"
 #include "txt_sgx_detect.h"
