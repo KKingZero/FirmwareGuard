@@ -800,7 +800,8 @@ static void add_change(baseline_comparison_t *result, const char *type,
 
     result->change_count++;
 
-    if (severity < result->overall_risk) {
+    /* Track the worst severity seen. Enum ranks worse = higher value. */
+    if (severity > result->overall_risk) {
         result->overall_risk = severity;
     }
 }

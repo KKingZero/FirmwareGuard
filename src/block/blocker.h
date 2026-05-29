@@ -2,7 +2,7 @@
 #define FG_BLOCKER_H
 
 #include <stdbool.h>
-#include "probe.h"
+#include "../core/probe.h"
 #include "firmwareguard.h"
 
 /* Blocking action types */

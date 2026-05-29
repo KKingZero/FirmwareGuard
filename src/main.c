@@ -1,4 +1,4 @@
-#include "probe.h"
+#include "core/probe.h"
 #include "core/acpi.h"
 #include "core/me_psp.h"
 #include "core/nic.h"

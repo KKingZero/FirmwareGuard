@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 #include <stdio.h>
-#include "probe.h"
+#include "../core/probe.h"
 #include "../block/blocker.h"
 #include "firmwareguard.h"
 
