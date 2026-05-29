@@ -1,4 +1,5 @@
 #include "bootguard_detect.h"
+#include "../../include/fg_arch.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +17,7 @@ static int read_efi_variable_size(const char *name, const char *guid, size_t *si
 static int read_efi_variable_byte(const char *name, const char *guid, uint8_t *value);
 
 int bootguard_init(void) {
+    FG_REQUIRE_X86();
     FG_INFO("Initializing Boot Guard detection subsystem...");
 
     int ret = msr_init();
@@ -139,6 +141,7 @@ risk_level_t bootguard_assess_risk(const bootguard_status_t *status) {
 }
 
 int bootguard_scan_status(bootguard_status_t *result) {
+    FG_REQUIRE_X86();
     uint64_t sacm_info;
     int ret;
 
@@ -234,6 +237,7 @@ int bootguard_scan_status(bootguard_status_t *result) {
 }
 
 int bootguard_scan_policy(bootguard_policy_result_t *result) {
+    FG_REQUIRE_X86();
     if (!result) return FG_ERROR;
 
     memset(result, 0, sizeof(bootguard_policy_result_t));
@@ -311,6 +315,7 @@ int bootguard_scan_policy(bootguard_policy_result_t *result) {
 }
 
 int secureboot_audit_scan(secureboot_audit_t *result) {
+    FG_REQUIRE_X86();
     uint8_t value;
     size_t size;
 

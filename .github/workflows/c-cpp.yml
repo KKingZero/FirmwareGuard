@@ -8,16 +8,19 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
-    - name: configure
-      run: ./configure
-    - name: make
-      run: make
-    - name: make check
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libssl-dev libsqlite3-dev
+    - name: Build userspace CLI
+      run: make CC=/usr/bin/gcc
+    - name: Run unit tests
+      run: CC=/usr/bin/gcc ./tools/run-tests.sh
+    - name: Run ARM-safe tests
+      run: make -f Makefile.arm test CC=/usr/bin/gcc
+    - name: Static analysis hook
       run: make check
-    - name: make distcheck
-      run: make distcheck

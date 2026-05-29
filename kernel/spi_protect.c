@@ -22,6 +22,7 @@
 #include <linux/io.h>
 #include <linux/spinlock.h>
 #include <linux/timer.h>
+#include <linux/version.h>
 #include <linux/jiffies.h>
 #include <linux/uaccess.h>
 #include "fwguard_km.h"
@@ -76,28 +77,14 @@
 #define FCYCLE_WRITE                2
 #define FCYCLE_ERASE                3
 
-/* SPI Event Types for userspace notification */
-#define SPI_EVENT_WRITE_ENABLE      0x01  /* BIOS Write Enable detected */
-#define SPI_EVENT_LOCK_DISABLED     0x02  /* BIOS Lock disabled */
-#define SPI_EVENT_WRITE_ATTEMPT     0x04  /* Flash write operation attempted */
-#define SPI_EVENT_ERASE_ATTEMPT     0x08  /* Flash erase operation attempted */
-#define SPI_EVENT_PROTECTION_OFF    0x10  /* SMM write protection disabled */
-#define SPI_EVENT_BIOS_REGION       0x20  /* Operation targets BIOS region */
-
 /* Maximum number of events to buffer */
 #define MAX_SPI_EVENTS              256
 
-/* SPI Event Structure
- * Records details of suspicious SPI flash activity
- */
-struct spi_event {
-    u64 timestamp;          /* jiffies when event occurred */
-    u32 event_type;         /* Bitmask of SPI_EVENT_* flags */
-    u32 bios_cntl;          /* BIOS_CNTL register value at event time */
-    u32 hsfsts_ctl;         /* HSFSTS_CTL register value */
-    u32 flash_addr;         /* Flash address being accessed */
-    u32 flash_cycle;        /* Type of flash cycle (read/write/erase) */
-};
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 15, 0)
+#define fg_del_timer_sync(timer) timer_delete_sync(timer)
+#else
+#define fg_del_timer_sync(timer) del_timer_sync(timer)
+#endif
 
 /* SPI Monitor State
  * Maintains current state and event history
@@ -563,7 +550,7 @@ void spi_monitor_cleanup(void)
     /* Stop monitoring timer */
     if (spi_state.monitoring_active) {
         spi_state.monitoring_active = false;
-        del_timer_sync(&spi_state.poll_timer);
+        fg_del_timer_sync(&spi_state.poll_timer);
     }
 
     /* Unmap SPI MMIO region */
@@ -642,7 +629,7 @@ void spi_stop_monitoring(void)
     pr_info("fwguard_spi: stopping SPI monitoring\n");
 
     spi_state.monitoring_active = false;
-    del_timer_sync(&spi_state.poll_timer);
+    fg_del_timer_sync(&spi_state.poll_timer);
 }
 
 /**

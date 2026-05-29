@@ -1,4 +1,5 @@
 #include "heci_monitor.h"
+#include "../../include/fg_arch.h"
 #include <sys/ioctl.h>
 #include <sys/select.h>
 #include <poll.h>
@@ -77,6 +78,7 @@ static int64_t timespec_diff_us(const struct timespec *start, const struct times
  * Initialize the HECI monitor subsystem.
  */
 int heci_init(void) {
+    FG_REQUIRE_X86();
     struct stat st;
     struct mei_connect_client_data connect_data;
     int ret;
@@ -148,6 +150,7 @@ int heci_init(void) {
  * Start monitoring HECI/MEI traffic.
  */
 int heci_start_monitor(bool enable_pattern_detection) {
+    FG_REQUIRE_X86();
     int ret;
 
     /* Ensure initialized */
@@ -208,6 +211,7 @@ int heci_stop_monitor(void) {
  * Get a copy of the current HECI traffic log.
  */
 int heci_get_log(heci_log_t *log) {
+    FG_REQUIRE_X86();
     if (!log) {
         return FG_ERROR;
     }
@@ -230,6 +234,7 @@ int heci_get_log(heci_log_t *log) {
  */
 int heci_analyze_traffic(const heci_log_t *log, heci_alert_t *alerts,
                          size_t max_alerts, size_t *num_alerts) {
+    FG_REQUIRE_X86();
     size_t alert_idx = 0;
     size_t i;
 

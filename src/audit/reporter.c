@@ -29,6 +29,7 @@ const char* reporter_component_type_to_string(component_type_t type) {
         case COMPONENT_ACPI_TABLE:      return "ACPI Table";
         case COMPONENT_NIC_TELEMETRY:   return "NIC Telemetry";
         case COMPONENT_CPU_FEATURE:     return "CPU Feature";
+        case COMPONENT_ARM_FIRMWARE:    return "ARM Firmware";
         default:                        return "Unknown";
     }
 }

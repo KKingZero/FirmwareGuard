@@ -1,0 +1,74 @@
+# FirmwareGuard ARM-safe build
+# Builds firmwareguard-arm: a standalone binary that activates only the
+# ARM detection surface. Runs on any arch; on non-ARM hosts the detectors
+# correctly report "not present" for devicetree/tee/etc.
+
+CC ?= gcc
+ARCH := $(shell uname -m)
+
+SECURITY_FLAGS = -fstack-protector-strong -D_FORTIFY_SOURCE=2 \
+                 -Wformat=2 -Wformat-security -fPIE \
+                 -Wshadow -Wpointer-arith -Wcast-qual
+CFLAGS   = -Wall -Wextra -O2 -std=gnu11 -Iinclude -Isrc -D_GNU_SOURCE $(SECURITY_FLAGS)
+LDFLAGS  = -pie -Wl,-z,relro,-z,now -Wl,-z,noexecstack
+
+BUILD_DIR = build-arm
+TARGET    = firmwareguard-arm
+TEST_BIN  = $(BUILD_DIR)/test_arch
+
+ARM_SRCS = src/arm/arm_detect.c \
+           src/arm/arm_probe.c \
+           src/arm/arm_main.c
+CJSON_SRC = src/cJSON.c
+
+ARM_OBJS  = $(patsubst src/arm/%.c,$(BUILD_DIR)/arm_%.o,$(ARM_SRCS))
+CJSON_OBJ = $(BUILD_DIR)/cJSON.o
+
+.PHONY: all
+all: banner $(BUILD_DIR) $(TARGET)
+
+.PHONY: banner
+banner:
+	@echo "==========================================="
+	@echo " FirmwareGuard ARM-safe build"
+	@echo " host arch: $(ARCH)"
+	@echo " Builds on any arch. Only ARM detectors run."
+	@echo " x86-specific paths are absent from this binary."
+	@echo "==========================================="
+
+$(BUILD_DIR):
+	@mkdir -p $(BUILD_DIR)
+
+$(BUILD_DIR)/arm_%.o: src/arm/%.c | $(BUILD_DIR)
+	@echo "  CC $<"
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(CJSON_OBJ): $(CJSON_SRC) | $(BUILD_DIR)
+	@echo "  CC $<"
+	@$(CC) $(CFLAGS) -Wno-unused-parameter -c $< -o $@
+
+$(TARGET): $(ARM_OBJS) $(CJSON_OBJ)
+	@echo "  LD $@"
+	@$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	@echo "Built: ./$(TARGET)"
+
+.PHONY: test
+test: $(BUILD_DIR) $(TEST_BIN)
+	@echo "Running tests..."
+	@$(TEST_BIN)
+
+$(TEST_BIN): tests/test_arch.c src/arm/arm_detect.c $(CJSON_OBJ) | $(BUILD_DIR)
+	@echo "  CC tests/test_arch.c"
+	@$(CC) $(CFLAGS) -o $@ tests/test_arch.c src/arm/arm_detect.c $(CJSON_OBJ) $(LDFLAGS)
+
+.PHONY: clean
+clean:
+	@rm -rf $(BUILD_DIR) $(TARGET)
+	@echo "Cleaned ARM build artifacts."
+
+.PHONY: help
+help:
+	@echo "FirmwareGuard ARM-safe Makefile"
+	@echo "  make -f Makefile.arm           Build firmwareguard-arm"
+	@echo "  make -f Makefile.arm test      Compile and run tests/test_arch"
+	@echo "  make -f Makefile.arm clean     Remove build-arm/ and binary"

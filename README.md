@@ -11,6 +11,15 @@ FirmwareGuard is a **low-level, vendor-independent framework** for detecting and
 
 Built for **security researchers, hardware engineers, and privacy-focused operators** who need transparent, auditable firmware security.
 
+## Current Verified Status
+
+The current tree is in build-stabilization state. The default userspace CLI,
+ARM-safe test target, safety tests, and kernel module build have been restored,
+but several Phase 4 research modules remain source-present prototypes until
+they are wired into the main CLI and CI.
+
+See [STATUS.md](STATUS.md) for the verified command surface and prototype list.
+
 ---
 
 ## 🔥 Why FirmwareGuard Matters
@@ -79,9 +88,8 @@ FirmwareGuard fills this gap.
 - **Kernel Module (Optional)**: Provides a mechanism for kernel-level MMIO region tracking and DMA restriction.
 - **Configuration System**: Manages settings and state via a clear configuration file (`/etc/firmwareguard/config.conf`).
 
-### ✅ Enhanced Security & CI/CD (Phase 3 - NEW!)
-- **Lightweight Agent**: CLI-based daemon for scheduled scanning and offline audit caching.
-- **CI/CD Integration**: GitHub Actions workflows for automated hardware validation and compliance checking.
+### ✅ Enhanced Security & CI/CD (Build Stabilization)
+- **CI Coverage**: GitHub Actions builds the default CLI and runs available unit tests.
 - **Secure Boot Detection**: Pre-flight checks prevent UEFI modification failures on Secure Boot systems.
 - **HAP Platform Validation**: CPU generation detection prevents Intel ME disable attempts on unsupported hardware.
 - **HAP Platform Validation**: CPU generation detection prevents system bricking on unsupported platforms.
@@ -457,18 +465,18 @@ sudo ./firmwareguard block --json | jq -r '.actions[] | select(.successful==true
 - [x] Persistent configuration
 - [x] All Phase 2 known limitations fixed
 
-### Phase 3 - Bug Fixes & CI/CD ✅ (Complete)
+### Phase 3 - Bug Fixes & CI/CD ⚠️ (Partially Verified)
 - [x] Secure Boot detection and warnings
 - [x] HAP platform support validation
 - [x] Enhanced GRUB backup and dry-run
-- [x] Kernel module conflict detection
-- [x] Agent architecture (CLI-based daemon, caching, scheduling)
-- [x] GitHub Actions CI/CD integration
+- [ ] Kernel module conflict detection
+- [ ] Agent architecture (CLI-based daemon, caching, scheduling)
+- [x] GitHub Actions CI/CD integration for current build/test targets
 - [x] All known limitations from Phase 2 resolved
 
 **Note:** Web-based management features are not planned. FirmwareGuard remains a CLI security tool.
 
-### Phase 4 - Research & Innovation (Planned)
+### Phase 4 - Research & Innovation (Prototype/Planned)
 - [ ] AI-powered anomaly detection in firmware behavior
 - [ ] Automated firmware binary analysis
 - [ ] Supply chain integrity verification

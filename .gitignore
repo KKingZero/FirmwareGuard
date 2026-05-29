@@ -1,6 +1,9 @@
 # Build artifacts
 build/
+build-arm/
 firmwareguard
+firmwareguard-arm
+src/monitor/heci_test
 *.o
 *.a
 *.so
@@ -31,5 +34,6 @@ Thumbs.db
 
 # Debug files
 *.gdb
-core
+/core
+core.*
 vgcore.*

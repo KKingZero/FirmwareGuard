@@ -1,4 +1,5 @@
 #include "msr.h"
+#include "../../include/fg_arch.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -11,6 +12,7 @@ static int *msr_fds = NULL;
 static int cpu_count = 0;
 
 int msr_init(void) {
+    FG_REQUIRE_X86();
     if (fg_require_root() != FG_SUCCESS) {
         return FG_NO_PERMISSION;
     }
@@ -58,6 +60,7 @@ void msr_cleanup(void) {
 }
 
 int msr_read(uint32_t cpu, uint32_t msr, uint64_t *value) {
+    FG_REQUIRE_X86();
     char msr_path[64];
     int fd;
     ssize_t ret;
@@ -66,7 +69,12 @@ int msr_read(uint32_t cpu, uint32_t msr, uint64_t *value) {
         return FG_ERROR;
     }
 
-    if (cpu >= cpu_count) {
+    if (cpu_count <= 0) {
+        FG_LOG_ERROR("MSR subsystem is not initialized");
+        return FG_NO_PERMISSION;
+    }
+
+    if (cpu >= (uint32_t)cpu_count) {
         FG_LOG_ERROR("CPU %u out of range (max: %d)", cpu, cpu_count - 1);
         return FG_ERROR;
     }
@@ -106,11 +114,17 @@ int msr_read(uint32_t cpu, uint32_t msr, uint64_t *value) {
 }
 
 int msr_write(uint32_t cpu, uint32_t msr, uint64_t value) {
+    FG_REQUIRE_X86();
     char msr_path[64];
     int fd;
     ssize_t ret;
 
-    if (cpu >= cpu_count) {
+    if (cpu_count <= 0) {
+        FG_LOG_ERROR("MSR subsystem is not initialized");
+        return FG_NO_PERMISSION;
+    }
+
+    if (cpu >= (uint32_t)cpu_count) {
         FG_LOG_ERROR("CPU %u out of range (max: %d)", cpu, cpu_count - 1);
         return FG_ERROR;
     }

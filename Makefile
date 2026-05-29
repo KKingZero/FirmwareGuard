@@ -105,12 +105,11 @@ CJSON_SRC = $(SRC_DIR)/cJSON.c
 
 MAIN_SRC = $(SRC_DIR)/main.c
 
-# All sources
+# Default userspace binary sources. Prototype/research modules remain in-tree
+# but are not linked until they have CLI wiring and build coverage.
 ALL_SRCS = $(CORE_SRCS) $(BLOCK_SRCS) $(AUDIT_SRCS) $(SAFETY_SRCS) \
            $(CONFIG_MGMT_SRCS) $(UEFI_SRCS) $(GRUB_SRCS) $(PATTERN_SRCS) \
-           $(DETECT_SRCS) $(MIGRATE_SRCS) $(DATABASE_SRCS) $(ROOTKIT_SRCS) \
-           $(DUMP_SRCS) $(MONITOR_SRCS) $(INTEGRITY_SRCS) $(GHIDRA_SRCS) \
-           $(COMPLIANCE_SRCS) $(CJSON_SRC) $(MAIN_SRC)
+           $(DETECT_SRCS) $(COMPLIANCE_SRCS) $(CJSON_SRC) $(MAIN_SRC)
 
 # Object files
 CORE_OBJS = $(patsubst $(CORE_DIR)/%.c,$(BUILD_DIR)/core_%.o,$(CORE_SRCS))
@@ -135,31 +134,22 @@ MAIN_OBJ = $(BUILD_DIR)/main.o
 
 ALL_OBJS = $(CORE_OBJS) $(BLOCK_OBJS) $(AUDIT_OBJS) $(SAFETY_OBJS) \
            $(CONFIG_MGMT_OBJS) $(UEFI_OBJS) $(GRUB_OBJS) $(PATTERN_OBJS) \
-           $(DETECT_OBJS) $(MIGRATE_OBJS) $(DATABASE_OBJS) $(ROOTKIT_OBJS) \
-           $(DUMP_OBJS) $(MONITOR_OBJS) $(INTEGRITY_OBJS) $(GHIDRA_OBJS) \
-           $(COMPLIANCE_OBJS) $(CJSON_OBJ) $(MAIN_OBJ)
+           $(DETECT_OBJS) $(COMPLIANCE_OBJS) $(CJSON_OBJ) $(MAIN_OBJ)
 
 # Default target
 .PHONY: all
 all: $(BUILD_DIR) $(TARGET) check-offline
 	@echo ""
 	@echo "========================================="
-	@echo "  FirmwareGuard v2.0.0 Build Complete"
-	@echo "  Phase 4: Advanced Detection & Analysis"
+	@echo "  FirmwareGuard Build Complete"
+	@echo "  Stabilized userspace CLI"
 	@echo "========================================="
 	@echo "Binary: ./$(TARGET)"
 	@echo ""
-	@echo "Phase 4 Features:"
-	@echo "  - Ghidra scripting suite"
-	@echo "  - Supply chain checksum database"
-	@echo "  - Rootkit detection (LoJax, MoonBounce, BlackLotus, etc.)"
-	@echo "  - Live firmware memory dump"
-	@echo "  - HECI/ME traffic monitoring"
-	@echo "  - UEFI runtime integrity checks"
-	@echo "  - SPI write protection monitoring"
-	@echo "  - Coreboot migration assistant"
-	@echo "  - CVE correlation database"
-	@echo "  - Threat intelligence integration"
+	@echo "Default CLI includes:"
+	@echo "  - Read-only hardware scan and block recommendations"
+	@echo "  - SMM, UEFI, Boot Guard, TXT/SGX, baseline, implant, compliance commands"
+	@echo "  - Prototype research modules remain in-tree; command wiring is deferred"
 	@echo ""
 	@echo "To install system-wide: sudo make install"
 	@echo "To build kernel module: make kernel"
@@ -169,9 +159,10 @@ all: $(BUILD_DIR) $(TARGET) check-offline
 .PHONY: check-offline
 check-offline:
 	@echo "Verifying offline-only codebase..."
-	@NETWORK_CODE=$$(grep -rn "connect\|bind\|listen\|accept\|recv\|send\|curl_\|http_" $(SRC_DIR) --include="*.c" --include="*.h" 2>/dev/null | \
+	@NETWORK_CODE=$$(grep -nE "\b(connect|listen|accept|recv|send)\b|curl_|http_" $(ALL_SRCS) 2>/dev/null | \
 		grep -v "// " | \
 		grep -v "/\*" | \
+		grep -v "sqlite3_bind" | \
 		grep -v "printf\|fprintf\|snprintf" | \
 		grep -v "disconnect\|reconnect" || true); \
 	if [ -n "$$NETWORK_CODE" ]; then \

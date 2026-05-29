@@ -1,8 +1,10 @@
-# FirmwareGuard v2.0.0 - Phase 4 Release
+# FirmwareGuard v2.0.0 - Phase 4 Draft Notes
 
-**Complete Offline Firmware Security Suite**
+**Status: draft/unreleased**
 
-This major release implements all 10 Phase 4 features, providing a comprehensive offline-only toolkit for firmware security analysis, threat detection, and system hardening.
+These notes describe Phase 4 goals and source modules present in the tree. They
+should not be treated as a shipped release until the modules are wired into the
+default CLI, covered by CI, and a release is explicitly cut.
 
 ## 🔒 Security Philosophy
 

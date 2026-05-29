@@ -39,6 +39,7 @@ typedef enum {
     COMPONENT_ACPI_TABLE,
     COMPONENT_NIC_TELEMETRY,
     COMPONENT_CPU_FEATURE,
+    COMPONENT_ARM_FIRMWARE,
     COMPONENT_MAX
 } component_type_t;
 
@@ -79,5 +80,7 @@ static inline int fg_require_root(void) {
     }
     return FG_SUCCESS;
 }
+
+#include "fg_arch.h"
 
 #endif /* FIRMWAREGUARD_H */

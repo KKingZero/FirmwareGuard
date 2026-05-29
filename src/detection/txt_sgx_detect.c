@@ -1,4 +1,5 @@
 #include "txt_sgx_detect.h"
+#include "../../include/fg_arch.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,6 +18,7 @@ static bool check_cpu_smx_support(void);
 static bool check_cpu_sgx_support(void);
 
 int txt_sgx_init(void) {
+    FG_REQUIRE_X86();
     FG_INFO("Initializing TXT/SGX detection subsystem...");
 
     int ret = msr_init();
@@ -154,6 +156,7 @@ risk_level_t sgx_assess_risk(const sgx_config_t *config) {
 }
 
 int txt_scan_config(txt_config_t *result) {
+    FG_REQUIRE_X86();
     uint64_t feature_control;
     int ret;
 
@@ -304,6 +307,7 @@ int txt_scan_config(txt_config_t *result) {
 }
 
 int sgx_scan_config(sgx_config_t *result) {
+    FG_REQUIRE_X86();
     unsigned int eax, ebx, ecx, edx;
     uint64_t feature_control;
     int ret;
@@ -453,6 +457,7 @@ int sgx_scan_config(sgx_config_t *result) {
 }
 
 int tpm_scan_measurements(tpm_measurement_t *result) {
+    FG_REQUIRE_X86();
     struct stat st;
 
     if (!result) return FG_ERROR;
@@ -607,6 +612,7 @@ int tpm_scan_measurements(tpm_measurement_t *result) {
 }
 
 int trusted_boot_full_scan(trusted_boot_result_t *result) {
+    FG_REQUIRE_X86();
     if (!result) return FG_ERROR;
 
     memset(result, 0, sizeof(trusted_boot_result_t));

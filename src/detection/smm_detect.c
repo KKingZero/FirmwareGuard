@@ -1,4 +1,5 @@
 #include "smm_detect.h"
+#include "../../include/fg_arch.h"
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -10,6 +11,7 @@ static bool detect_is_amd(void);
 static void add_finding(smm_scan_result_t *result, const char *finding);
 
 int smm_detect_init(void) {
+    FG_REQUIRE_X86();
     FG_INFO("Initializing SMM detection subsystem...");
 
     /* Initialize MSR subsystem */
@@ -68,6 +70,7 @@ static void add_finding(smm_scan_result_t *result, const char *finding) {
 }
 
 int smm_read_region_info(smm_region_info_t *info, bool is_amd) {
+    FG_REQUIRE_X86();
     uint64_t value;
     int ret;
 
@@ -133,6 +136,7 @@ int smm_read_region_info(smm_region_info_t *info, bool is_amd) {
 }
 
 int smm_read_smi_stats(smm_smi_stats_t *stats) {
+    FG_REQUIRE_X86();
     uint64_t value;
     int ret;
 
@@ -160,6 +164,7 @@ int smm_read_smi_stats(smm_smi_stats_t *stats) {
 }
 
 int smm_read_security_config(smm_security_config_t *config) {
+    FG_REQUIRE_X86();
     uint64_t value;
     int ret;
 
@@ -247,6 +252,7 @@ const char *smm_risk_to_string(smm_risk_t risk) {
 }
 
 int smm_scan(smm_scan_result_t *result) {
+    FG_REQUIRE_X86();
     if (!result) {
         return FG_ERROR;
     }
@@ -362,6 +368,7 @@ int smm_scan(smm_scan_result_t *result) {
 }
 
 int smm_scan_brief(smm_scan_result_t *result) {
+    FG_REQUIRE_X86();
     if (!result) {
         return FG_ERROR;
     }
