@@ -49,7 +49,8 @@ CORE_SRCS = $(CORE_DIR)/msr.c \
 
 BLOCK_SRCS = $(BLOCK_DIR)/blocker.c
 
-AUDIT_SRCS = $(AUDIT_DIR)/reporter.c
+AUDIT_SRCS = $(AUDIT_DIR)/reporter.c \
+             $(AUDIT_DIR)/sarif.c
 
 # Phase 2 sources
 SAFETY_SRCS = $(SAFETY_DIR)/safety.c

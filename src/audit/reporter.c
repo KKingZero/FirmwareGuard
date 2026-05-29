@@ -49,11 +49,143 @@ static void json_escape_string(const char *input, char *output, size_t output_si
     output[j] = '\0';
 }
 
+static void html_escape_string(const char *input, char *output, size_t output_size) {
+    size_t i, j = 0;
+    for (i = 0; input[i] && j + 7 < output_size; i++) {
+        switch (input[i]) {
+            case '&':  j += (size_t)snprintf(output + j, output_size - j, "&amp;");  break;
+            case '<':  j += (size_t)snprintf(output + j, output_size - j, "&lt;");   break;
+            case '>':  j += (size_t)snprintf(output + j, output_size - j, "&gt;");   break;
+            case '"':  j += (size_t)snprintf(output + j, output_size - j, "&quot;"); break;
+            case '\'': j += (size_t)snprintf(output + j, output_size - j, "&#39;");  break;
+            default:   output[j++] = input[i]; break;
+        }
+    }
+    output[j] = '\0';
+}
+
+/* Lowercase CSS class for a risk level, used for color coding */
+static const char* risk_css_class(risk_level_t risk) {
+    switch (risk) {
+        case RISK_CRITICAL: return "critical";
+        case RISK_HIGH:     return "high";
+        case RISK_MEDIUM:   return "medium";
+        case RISK_LOW:      return "low";
+        default:            return "none";
+    }
+}
+
+static void html_doc_header(FILE *output, const char *title) {
+    fprintf(output,
+        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n"
+        "<meta charset=\"utf-8\">\n"
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
+        "<title>%s</title>\n"
+        "<style>\n"
+        "  body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}\n"
+        "  .wrap{max-width:960px;margin:0 auto;padding:2rem}\n"
+        "  h1{font-size:1.5rem;margin:0 0 .25rem}\n"
+        "  h2{font-size:1.1rem;margin:2rem 0 .5rem;border-bottom:1px solid #2a2f3a;padding-bottom:.3rem}\n"
+        "  .meta{color:#8a93a2;font-size:.85rem;margin-bottom:1rem}\n"
+        "  .banner{padding:.75rem 1rem;border-radius:6px;font-weight:600;margin:1rem 0}\n"
+        "  table{width:100%%;border-collapse:collapse;font-size:.9rem}\n"
+        "  th,td{text-align:left;padding:.5rem .6rem;border-bottom:1px solid #232833;vertical-align:top}\n"
+        "  th{color:#8a93a2;font-weight:600;text-transform:uppercase;font-size:.72rem;letter-spacing:.04em}\n"
+        "  .pill{display:inline-block;padding:.1rem .5rem;border-radius:999px;font-size:.75rem;font-weight:600}\n"
+        "  .critical{background:#4a1020;color:#ff6b8a} .high{background:#4a2410;color:#ff9d54}\n"
+        "  .medium{background:#4a4310;color:#ffe14d} .low{background:#10324a;color:#5cc0ff}\n"
+        "  .none{background:#1a2b1a;color:#7fd47f}\n"
+        "  .summary{background:#161a22;border:1px solid #232833;border-radius:6px;padding:1rem;white-space:pre-wrap}\n"
+        "</style>\n</head>\n<body>\n<div class=\"wrap\">\n",
+        title);
+}
+
+static void html_doc_footer(FILE *output) {
+    fprintf(output, "</div>\n</body>\n</html>\n");
+}
+
+static void html_audit_section(FILE *output, const audit_result_t *audit) {
+    char esc[1024];
+
+    fprintf(output, "<h1>FirmwareGuard Audit Report</h1>\n");
+    fprintf(output, "<div class=\"meta\">Version %s &middot; %s</div>\n",
+            FG_VERSION, ctime(&(time_t){time(NULL)}));
+    fprintf(output, "<div class=\"banner %s\">Overall Risk: %s &middot; %d component(s)</div>\n",
+            risk_css_class(audit->overall_risk),
+            reporter_risk_to_string(audit->overall_risk),
+            audit->num_components);
+
+    if (audit->num_components > 0) {
+        fprintf(output, "<h2>Detected Components</h2>\n<table>\n"
+            "<tr><th>#</th><th>Name</th><th>Type</th><th>Status</th>"
+            "<th>Risk</th><th>Blockable</th><th>Details</th></tr>\n");
+        for (int i = 0; i < audit->num_components; i++) {
+            const component_status_t *comp = &audit->components[i];
+            html_escape_string(comp->details, esc, sizeof(esc));
+            char esc_name[256];
+            html_escape_string(comp->name, esc_name, sizeof(esc_name));
+            fprintf(output,
+                "<tr><td>%d</td><td>%s</td><td>%s</td><td>%s</td>"
+                "<td><span class=\"pill %s\">%s</span></td><td>%s</td><td>%s</td></tr>\n",
+                i + 1, esc_name,
+                reporter_component_type_to_string(comp->type),
+                comp->active ? "ACTIVE" : "Inactive",
+                risk_css_class(comp->risk), reporter_risk_to_string(comp->risk),
+                comp->blockable ? "Yes" : "No", esc);
+        }
+        fprintf(output, "</table>\n");
+    } else {
+        fprintf(output, "<p>No telemetry components detected.</p>\n");
+    }
+
+    html_escape_string(audit->summary, esc, sizeof(esc));
+    fprintf(output, "<h2>Summary</h2>\n<div class=\"summary\">%s</div>\n", esc);
+}
+
+static void html_blocking_section(FILE *output, const blocking_results_t *results) {
+    char esc[1024];
+
+    fprintf(output, "<h2>Blocking Actions</h2>\n");
+    fprintf(output, "<div class=\"meta\">%d action(s) &middot; %d successful &middot; "
+            "%d failed/recommended &middot; reboot %s</div>\n",
+            results->num_actions, results->successful_blocks,
+            results->failed_blocks, results->requires_reboot ? "required" : "not required");
+
+    if (results->num_actions > 0) {
+        fprintf(output, "<table>\n<tr><th>#</th><th>Component</th><th>Status</th>"
+            "<th>Method</th><th>Details</th><th>Recommendation</th></tr>\n");
+        for (int i = 0; i < results->num_actions; i++) {
+            const block_result_t *act = &results->actions[i];
+            char esc_method[512], esc_rec[1024], esc_comp[256];
+            html_escape_string(act->component_name, esc_comp, sizeof(esc_comp));
+            html_escape_string(act->method, esc_method, sizeof(esc_method));
+            html_escape_string(act->details, esc, sizeof(esc));
+            html_escape_string(act->recommendation, esc_rec, sizeof(esc_rec));
+            fprintf(output,
+                "<tr><td>%d</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n",
+                i + 1, esc_comp,
+                act->successful ? "SUCCESS" : act->attempted ? "FAILED" : "RECOMMENDATION",
+                esc_method, esc, esc_rec);
+        }
+        fprintf(output, "</table>\n");
+    }
+
+    html_escape_string(results->summary, esc, sizeof(esc));
+    fprintf(output, "<div class=\"summary\">%s</div>\n", esc);
+}
+
 int reporter_generate_audit_report(const audit_result_t *audit,
                                    report_format_t format,
                                    FILE *output) {
     if (!audit || !output) {
         return FG_ERROR;
+    }
+
+    if (format == REPORT_FORMAT_HTML) {
+        html_doc_header(output, "FirmwareGuard Audit Report");
+        html_audit_section(output, audit);
+        html_doc_footer(output);
+        return FG_SUCCESS;
     }
 
     if (format == REPORT_FORMAT_JSON) {
@@ -139,6 +271,13 @@ int reporter_generate_blocking_report(const blocking_results_t *results,
         return FG_ERROR;
     }
 
+    if (format == REPORT_FORMAT_HTML) {
+        html_doc_header(output, "FirmwareGuard Blocking Report");
+        html_blocking_section(output, results);
+        html_doc_footer(output);
+        return FG_SUCCESS;
+    }
+
     if (format == REPORT_FORMAT_JSON) {
         /* JSON format */
         fprintf(output, "{\n");
@@ -219,6 +358,14 @@ int reporter_generate_combined_report(const audit_result_t *audit,
                                       FILE *output) {
     if (!audit || !blocking || !output) {
         return FG_ERROR;
+    }
+
+    if (format == REPORT_FORMAT_HTML) {
+        html_doc_header(output, "FirmwareGuard Report");
+        html_audit_section(output, audit);
+        html_blocking_section(output, blocking);
+        html_doc_footer(output);
+        return FG_SUCCESS;
     }
 
     if (format == REPORT_FORMAT_JSON) {

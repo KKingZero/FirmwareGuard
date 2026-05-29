@@ -11,7 +11,8 @@
 typedef enum {
     REPORT_FORMAT_TEXT = 0,
     REPORT_FORMAT_JSON,
-    REPORT_FORMAT_DETAILED
+    REPORT_FORMAT_DETAILED,
+    REPORT_FORMAT_HTML
 } report_format_t;
 
 /* Initialize reporter subsystem */

@@ -4,6 +4,7 @@
 #include "core/nic.h"
 #include "block/blocker.h"
 #include "audit/reporter.h"
+#include "audit/sarif.h"
 #include "detection/smm_detect.h"
 #include "detection/uefi_extract.h"
 #include "detection/bootguard_detect.h"
@@ -45,6 +46,8 @@ static void print_usage(const char *prog_name) {
     printf("\n");
     printf("Options:\n");
     printf("  -j, --json       Output in JSON format\n");
+    printf("      --html       Output as a self-contained HTML report (scan/block)\n");
+    printf("      --sarif      Output as SARIF 2.1.0 (scan/block)\n");
     printf("  -o, --output     Output file (default: stdout)\n");
     printf("  -v, --verbose    Verbose output\n");
     printf("  -b, --brief      Brief/quick output (for smm-scan)\n");
@@ -64,7 +67,7 @@ static void print_usage(const char *prog_name) {
     printf("\n");
 }
 
-static int cmd_scan(int argc, char **argv, bool json_output, const char *output_file) {
+static int cmd_scan(int argc, char **argv, report_format_t fmt, bool sarif, const char *output_file) {
     probe_result_t probe;
     audit_result_t audit;
     FILE *output = stdout;
@@ -107,9 +110,11 @@ static int cmd_scan(int argc, char **argv, bool json_output, const char *output_
     }
 
     /* Generate report */
-    reporter_generate_audit_report(&audit,
-                                   json_output ? REPORT_FORMAT_JSON : REPORT_FORMAT_TEXT,
-                                   output);
+    if (sarif) {
+        sarif_generate(&audit, output);
+    } else {
+        reporter_generate_audit_report(&audit, fmt, output);
+    }
 
     if (output != stdout) {
         fclose(output);
@@ -123,7 +128,7 @@ static int cmd_scan(int argc, char **argv, bool json_output, const char *output_
     return FG_SUCCESS;
 }
 
-static int cmd_block(int argc, char **argv, bool json_output, const char *output_file) {
+static int cmd_block(int argc, char **argv, report_format_t fmt, bool sarif, const char *output_file) {
     probe_result_t probe;
     audit_result_t audit;
     blocking_results_t blocking;
@@ -174,9 +179,11 @@ static int cmd_block(int argc, char **argv, bool json_output, const char *output
     }
 
     /* Generate combined report */
-    reporter_generate_combined_report(&audit, &blocking,
-                                      json_output ? REPORT_FORMAT_JSON : REPORT_FORMAT_TEXT,
-                                      output);
+    if (sarif) {
+        sarif_generate(&audit, output);
+    } else {
+        reporter_generate_combined_report(&audit, &blocking, fmt, output);
+    }
 
     if (output != stdout) {
         fclose(output);
@@ -979,13 +986,19 @@ static int cmd_compliance(int argc, char **argv, bool json_output, const char *o
 int main(int argc, char **argv) {
     int opt;
     bool json_output = false;
+    bool html_output = false;
+    bool sarif_output = false;
     bool verbose = false;
     bool brief = false;
     const char *output_file = NULL;
     const char *command = NULL;
 
+    enum { OPT_HTML = 1000, OPT_SARIF };
+
     static struct option long_options[] = {
         {"json",    no_argument,       0, 'j'},
+        {"html",    no_argument,       0, OPT_HTML},
+        {"sarif",   no_argument,       0, OPT_SARIF},
         {"output",  required_argument, 0, 'o'},
         {"verbose", no_argument,       0, 'v'},
         {"brief",   no_argument,       0, 'b'},
@@ -1013,6 +1026,12 @@ int main(int argc, char **argv) {
             case 'j':
                 json_output = true;
                 break;
+            case OPT_HTML:
+                html_output = true;
+                break;
+            case OPT_SARIF:
+                sarif_output = true;
+                break;
             case 'v':
                 verbose = true;
                 break;
@@ -1031,14 +1050,19 @@ int main(int argc, char **argv) {
         }
     }
 
+    /* Resolve report format for reporter-based commands (scan/block/report).
+     * Precedence: HTML > JSON > text. SARIF is handled out-of-band. */
+    report_format_t report_fmt = html_output ? REPORT_FORMAT_HTML :
+                                 json_output ? REPORT_FORMAT_JSON : REPORT_FORMAT_TEXT;
+
     /* Execute command */
     if (strcmp(command, "scan") == 0) {
-        return cmd_scan(argc, argv, json_output, output_file);
+        return cmd_scan(argc, argv, report_fmt, sarif_output, output_file);
     } else if (strcmp(command, "block") == 0) {
-        return cmd_block(argc, argv, json_output, output_file);
+        return cmd_block(argc, argv, report_fmt, sarif_output, output_file);
     } else if (strcmp(command, "report") == 0) {
         /* For now, report is same as scan */
-        return cmd_scan(argc, argv, json_output, output_file);
+        return cmd_scan(argc, argv, report_fmt, sarif_output, output_file);
     } else if (strcmp(command, "panic") == 0) {
         return cmd_panic(argc, argv);
     } else if (strcmp(command, "smm-scan") == 0) {
