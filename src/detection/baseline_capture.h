@@ -225,6 +225,31 @@ typedef struct {
     char summary[2048];
 } baseline_comparison_t;
 
+/* Drift history: one entry per consecutive snapshot pair in a history dir */
+#define MAX_DRIFT_INTERVALS 128
+
+typedef struct {
+    time_t from_time;
+    time_t to_time;
+    char from_id[64];
+    char to_id[64];
+    int change_count;
+    int pci_added;
+    int pci_removed;
+    int usb_added;
+    int usb_removed;
+    int modules_added;
+    risk_level_t max_severity;   /* worst change severity in this interval */
+} baseline_drift_interval_t;
+
+typedef struct {
+    char dir[256];
+    int snapshot_count;
+    int interval_count;
+    baseline_drift_interval_t intervals[MAX_DRIFT_INTERVALS];
+    risk_level_t max_severity;   /* worst severity across all intervals */
+} baseline_drift_t;
+
 /* Initialize baseline capture subsystem */
 int baseline_init(void);
 void baseline_cleanup(void);
@@ -244,6 +269,17 @@ int baseline_compare(const baseline_snapshot_t *baseline,
 /* Compare against saved baseline file */
 int baseline_compare_file(const char *baseline_path,
                           baseline_comparison_t *result);
+
+/* Drift history.
+ * baseline_history_dir resolves the default store (override may be NULL ->
+ * $HOME/.firmwareguard/baselines). baseline_history_save writes the snapshot
+ * into the store with a time-sortable filename. baseline_history_drift walks
+ * the store in chronological order and compares consecutive snapshots. */
+int baseline_history_dir(char *buf, size_t size, const char *override);
+int baseline_history_save(const baseline_snapshot_t *snapshot, const char *dir);
+int baseline_history_drift(const char *dir, baseline_drift_t *drift);
+void baseline_drift_print(const baseline_drift_t *drift, bool verbose);
+int baseline_drift_to_json(const baseline_drift_t *drift, char *buffer, size_t size);
 
 /* Individual capture functions */
 int baseline_capture_cpu(cpu_snapshot_t *cpu);

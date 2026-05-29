@@ -37,6 +37,7 @@ static void print_usage(const char *prog_name) {
     printf("  trusted-boot-full Full trusted boot analysis (TXT + SGX + TPM)\n");
     printf("  baseline-capture  Capture comprehensive system baseline snapshot\n");
     printf("  baseline-compare  Compare current state against saved baseline\n");
+    printf("  baseline-drift    Show drift across the baseline history store\n");
     printf("  implant-scan      Full hardware implant detection scan\n");
     printf("  acpi-scan         Scan ACPI tables for firmware telemetry indicators\n");
     printf("  nic-scan          Profile network interfaces (WoL, Intel AMT, firmware)\n");
@@ -48,7 +49,8 @@ static void print_usage(const char *prog_name) {
     printf("  -j, --json       Output in JSON format\n");
     printf("      --html       Output as a self-contained HTML report (scan/block)\n");
     printf("      --sarif      Output as SARIF 2.1.0 (scan/block)\n");
-    printf("  -o, --output     Output file (default: stdout)\n");
+    printf("      --history    Save into the drift history store (baseline-capture)\n");
+    printf("  -o, --output     Output file, or history dir for baseline-drift\n");
     printf("  -v, --verbose    Verbose output\n");
     printf("  -b, --brief      Brief/quick output (for smm-scan)\n");
     printf("  -h, --help       Show this help message\n");
@@ -697,7 +699,8 @@ static int cmd_trusted_boot_full(int argc, char **argv, bool json_output, bool v
     return ret == FG_NOT_SUPPORTED ? FG_SUCCESS : ret;
 }
 
-static int cmd_baseline_capture(int argc, char **argv, bool json_output, bool verbose, const char *output_file) {
+static int cmd_baseline_capture(int argc, char **argv, bool json_output, bool verbose,
+                                const char *output_file, bool history) {
     baseline_snapshot_t snapshot;
     int ret;
 
@@ -722,8 +725,16 @@ static int cmd_baseline_capture(int argc, char **argv, bool json_output, bool ve
         return ret;
     }
 
-    /* Save to file if specified */
-    if (output_file) {
+    /* Save into the drift-history store when requested. With --history the
+     * -o value (if any) is treated as the store directory, else the default. */
+    if (history) {
+        char dir[256];
+        baseline_history_dir(dir, sizeof(dir), output_file);
+        if (baseline_history_save(&snapshot, dir) == FG_SUCCESS) {
+            FG_INFO("Baseline added to history store: %s", dir);
+        }
+    } else if (output_file) {
+        /* Save to an explicit file */
         ret = baseline_save(&snapshot, output_file);
         if (ret == FG_SUCCESS) {
             FG_INFO("Baseline saved to: %s", output_file);
@@ -738,6 +749,40 @@ static int cmd_baseline_capture(int argc, char **argv, bool json_output, bool ve
         }
     } else {
         baseline_print_snapshot(&snapshot, verbose);
+    }
+
+    baseline_cleanup();
+    return FG_SUCCESS;
+}
+
+static int cmd_baseline_drift(int argc, char **argv, bool json_output, bool verbose,
+                              const char *output_file) {
+    (void)argc; (void)argv;
+    baseline_drift_t drift;
+    char dir[256];
+
+    if (baseline_init() != FG_SUCCESS) {
+        FG_LOG_ERROR("Failed to initialize baseline subsystem");
+        return FG_ERROR;
+    }
+
+    /* -o, if given, overrides the history store directory */
+    baseline_history_dir(dir, sizeof(dir), output_file);
+
+    int ret = baseline_history_drift(dir, &drift);
+    if (ret != FG_SUCCESS) {
+        FG_LOG_ERROR("Failed to read drift history from: %s", dir);
+        baseline_cleanup();
+        return ret;
+    }
+
+    if (json_output) {
+        char json_buffer[65536];
+        if (baseline_drift_to_json(&drift, json_buffer, sizeof(json_buffer)) == FG_SUCCESS) {
+            printf("%s\n", json_buffer);
+        }
+    } else {
+        baseline_drift_print(&drift, verbose);
     }
 
     baseline_cleanup();
@@ -990,15 +1035,17 @@ int main(int argc, char **argv) {
     bool sarif_output = false;
     bool verbose = false;
     bool brief = false;
+    bool history = false;
     const char *output_file = NULL;
     const char *command = NULL;
 
-    enum { OPT_HTML = 1000, OPT_SARIF };
+    enum { OPT_HTML = 1000, OPT_SARIF, OPT_HISTORY };
 
     static struct option long_options[] = {
         {"json",    no_argument,       0, 'j'},
         {"html",    no_argument,       0, OPT_HTML},
         {"sarif",   no_argument,       0, OPT_SARIF},
+        {"history", no_argument,       0, OPT_HISTORY},
         {"output",  required_argument, 0, 'o'},
         {"verbose", no_argument,       0, 'v'},
         {"brief",   no_argument,       0, 'b'},
@@ -1031,6 +1078,9 @@ int main(int argc, char **argv) {
                 break;
             case OPT_SARIF:
                 sarif_output = true;
+                break;
+            case OPT_HISTORY:
+                history = true;
                 break;
             case 'v':
                 verbose = true;
@@ -1086,9 +1136,11 @@ int main(int argc, char **argv) {
     } else if (strcmp(command, "trusted-boot-full") == 0) {
         return cmd_trusted_boot_full(argc, argv, json_output, verbose);
     } else if (strcmp(command, "baseline-capture") == 0) {
-        return cmd_baseline_capture(argc, argv, json_output, verbose, output_file);
+        return cmd_baseline_capture(argc, argv, json_output, verbose, output_file, history);
     } else if (strcmp(command, "baseline-compare") == 0) {
         return cmd_baseline_compare(argc, argv, json_output, verbose, output_file);
+    } else if (strcmp(command, "baseline-drift") == 0) {
+        return cmd_baseline_drift(argc, argv, json_output, verbose, output_file);
     } else if (strcmp(command, "implant-scan") == 0) {
         return cmd_implant_scan(argc, argv, json_output, verbose);
     } else if (strcmp(command, "acpi-scan") == 0) {

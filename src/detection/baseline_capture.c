@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <ctype.h>
 
 /* Baseline format version */
 #define BASELINE_VERSION 1
@@ -987,6 +988,269 @@ int baseline_compare_file(const char *baseline_path, baseline_comparison_t *resu
 
     /* Compare */
     return baseline_compare(&baseline, &current, result);
+}
+
+/* ============================================================================
+ * Drift History
+ * ============================================================================ */
+
+#define BASELINE_HISTORY_PREFIX "BL-"
+#define BASELINE_HISTORY_SUFFIX ".fwgb"
+
+int baseline_history_dir(char *buf, size_t size, const char *override) {
+    if (!buf || size == 0) {
+        return FG_ERROR;
+    }
+    if (override && override[0]) {
+        snprintf(buf, size, "%s", override);
+        return FG_SUCCESS;
+    }
+    const char *home = getenv("HOME");
+    if (!home || !home[0]) {
+        home = "/tmp";
+    }
+    snprintf(buf, size, "%s/.firmwareguard/baselines", home);
+    return FG_SUCCESS;
+}
+
+/* Create dir path component by component (mkdir -p for a known 2-level path). */
+static void mkdir_p(const char *path) {
+    char tmp[512];
+    snprintf(tmp, sizeof(tmp), "%s", path);
+    for (char *p = tmp + 1; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+            mkdir(tmp, 0700);
+            *p = '/';
+        }
+    }
+    mkdir(tmp, 0700);
+}
+
+int baseline_history_save(const baseline_snapshot_t *snapshot, const char *dir) {
+    if (!snapshot || !dir) {
+        return FG_ERROR;
+    }
+
+    mkdir_p(dir);
+
+    /* Sanitize hostname for use in a filename */
+    char host[64];
+    size_t h = 0;
+    for (size_t i = 0; snapshot->hostname[i] && h < sizeof(host) - 1; i++) {
+        char c = snapshot->hostname[i];
+        host[h++] = (isalnum((unsigned char)c) || c == '-' || c == '_') ? c : '_';
+    }
+    host[h] = '\0';
+    if (host[0] == '\0') {
+        snprintf(host, sizeof(host), "host");
+    }
+
+    /* Zero-padded capture_time keeps lexical order == chronological order */
+    char path[640];
+    snprintf(path, sizeof(path), "%s/%s%020lld-%s%s",
+             dir, BASELINE_HISTORY_PREFIX,
+             (long long)snapshot->capture_time, host, BASELINE_HISTORY_SUFFIX);
+
+    return baseline_save(snapshot, path);
+}
+
+static int is_history_file(const char *name) {
+    size_t pl = strlen(BASELINE_HISTORY_PREFIX);
+    size_t sl = strlen(BASELINE_HISTORY_SUFFIX);
+    size_t nl = strlen(name);
+    if (nl <= pl + sl) {
+        return 0;
+    }
+    return strncmp(name, BASELINE_HISTORY_PREFIX, pl) == 0 &&
+           strcmp(name + nl - sl, BASELINE_HISTORY_SUFFIX) == 0;
+}
+
+int baseline_history_drift(const char *dir, baseline_drift_t *drift) {
+    if (!dir || !drift) {
+        return FG_ERROR;
+    }
+
+    memset(drift, 0, sizeof(*drift));
+    snprintf(drift->dir, sizeof(drift->dir), "%s", dir);
+    drift->max_severity = RISK_NONE;
+
+    struct dirent **entries = NULL;
+    int n = scandir(dir, &entries, NULL, alphasort);
+    if (n < 0) {
+        FG_LOG_ERROR("Cannot read baseline history dir: %s", dir);
+        return FG_NOT_FOUND;
+    }
+
+    /* Collect sorted history filenames (alphasort + zero-padded time = chronological) */
+    char (*names)[256] = calloc(n, sizeof(*names));
+    int count = 0;
+    if (names) {
+        for (int i = 0; i < n; i++) {
+            if (is_history_file(entries[i]->d_name)) {
+                snprintf(names[count++], 256, "%s", entries[i]->d_name);
+            }
+            free(entries[i]);
+        }
+    }
+    free(entries);
+
+    drift->snapshot_count = count;
+    if (count < 2 || !names) {
+        free(names);
+        return FG_SUCCESS;  /* nothing to diff yet */
+    }
+
+    baseline_snapshot_t *prev = malloc(sizeof(baseline_snapshot_t));
+    baseline_snapshot_t *cur = malloc(sizeof(baseline_snapshot_t));
+    baseline_comparison_t *cmp = malloc(sizeof(baseline_comparison_t));
+    char path[640];
+
+    if (!prev || !cur || !cmp) {
+        free(prev); free(cur); free(cmp); free(names);
+        return FG_ERROR;
+    }
+
+    snprintf(path, sizeof(path), "%s/%s", dir, names[0]);
+    if (baseline_load(path, prev) != FG_SUCCESS) {
+        free(prev); free(cur); free(cmp); free(names);
+        return FG_ERROR;
+    }
+
+    for (int i = 1; i < count && drift->interval_count < MAX_DRIFT_INTERVALS; i++) {
+        snprintf(path, sizeof(path), "%s/%s", dir, names[i]);
+        if (baseline_load(path, cur) != FG_SUCCESS) {
+            continue;
+        }
+
+        baseline_compare(prev, cur, cmp);
+
+        baseline_drift_interval_t *iv = &drift->intervals[drift->interval_count];
+        iv->from_time = prev->capture_time;
+        iv->to_time = cur->capture_time;
+        snprintf(iv->from_id, sizeof(iv->from_id), "%s", prev->baseline_id);
+        snprintf(iv->to_id, sizeof(iv->to_id), "%s", cur->baseline_id);
+        iv->change_count = cmp->change_count;
+        iv->pci_added = cmp->pci_added;
+        iv->pci_removed = cmp->pci_removed;
+        iv->usb_added = cmp->usb_added;
+        iv->usb_removed = cmp->usb_removed;
+        iv->modules_added = cmp->modules_added;
+
+        /* Derive worst severity from individual changes (overall_risk in the
+         * comparison struct is unreliable), highest enum value = worst. */
+        iv->max_severity = RISK_NONE;
+        for (int c = 0; c < cmp->change_count; c++) {
+            if (cmp->changes[c].severity > iv->max_severity) {
+                iv->max_severity = cmp->changes[c].severity;
+            }
+        }
+        if (iv->max_severity > drift->max_severity) {
+            drift->max_severity = iv->max_severity;
+        }
+
+        drift->interval_count++;
+        memcpy(prev, cur, sizeof(baseline_snapshot_t));
+    }
+
+    free(prev);
+    free(cur);
+    free(cmp);
+    free(names);
+    return FG_SUCCESS;
+}
+
+void baseline_drift_print(const baseline_drift_t *drift, bool verbose) {
+    if (!drift) {
+        return;
+    }
+
+    printf("\n");
+    printf("========================================\n");
+    printf("  BASELINE DRIFT HISTORY\n");
+    printf("========================================\n");
+    printf("Store: %s\n", drift->dir);
+    printf("Snapshots: %d\n", drift->snapshot_count);
+    printf("Intervals: %d\n", drift->interval_count);
+    printf("Worst severity: %s\n", risk_level_to_str(drift->max_severity));
+    printf("\n");
+
+    if (drift->snapshot_count < 2) {
+        printf("Need at least 2 snapshots to show drift. Capture more with:\n");
+        printf("  firmwareguard baseline-capture --history\n\n");
+        return;
+    }
+
+    for (int i = 0; i < drift->interval_count; i++) {
+        const baseline_drift_interval_t *iv = &drift->intervals[i];
+        char from_buf[32], to_buf[32];
+        time_t f = iv->from_time, t = iv->to_time;
+        strftime(from_buf, sizeof(from_buf), "%Y-%m-%d %H:%M", localtime(&f));
+        strftime(to_buf, sizeof(to_buf), "%Y-%m-%d %H:%M", localtime(&t));
+
+        printf("[%d] %s -> %s\n", i + 1, from_buf, to_buf);
+        printf("    Changes: %d  (severity: %s)\n",
+               iv->change_count, risk_level_to_str(iv->max_severity));
+        if (verbose || iv->change_count > 0) {
+            printf("    PCI +%d/-%d  USB +%d/-%d  Modules +%d\n",
+                   iv->pci_added, iv->pci_removed,
+                   iv->usb_added, iv->usb_removed, iv->modules_added);
+        }
+    }
+    printf("\n");
+}
+
+int baseline_drift_to_json(const baseline_drift_t *drift, char *buffer, size_t size) {
+    if (!drift || !buffer) {
+        return FG_ERROR;
+    }
+
+    int w = snprintf(buffer, size,
+        "{\n"
+        "  \"store\": \"%s\",\n"
+        "  \"snapshot_count\": %d,\n"
+        "  \"interval_count\": %d,\n"
+        "  \"max_severity\": \"%s\",\n"
+        "  \"intervals\": [",
+        drift->dir, drift->snapshot_count, drift->interval_count,
+        risk_level_to_str(drift->max_severity));
+    if (w < 0 || (size_t)w >= size) {
+        return FG_ERROR;
+    }
+
+    for (int i = 0; i < drift->interval_count; i++) {
+        const baseline_drift_interval_t *iv = &drift->intervals[i];
+        int n = snprintf(buffer + w, size - w,
+            "%s\n    {\n"
+            "      \"from_time\": %lld,\n"
+            "      \"to_time\": %lld,\n"
+            "      \"from_id\": \"%s\",\n"
+            "      \"to_id\": \"%s\",\n"
+            "      \"change_count\": %d,\n"
+            "      \"pci_added\": %d,\n"
+            "      \"pci_removed\": %d,\n"
+            "      \"usb_added\": %d,\n"
+            "      \"usb_removed\": %d,\n"
+            "      \"modules_added\": %d,\n"
+            "      \"max_severity\": \"%s\"\n"
+            "    }",
+            i == 0 ? "" : ",",
+            (long long)iv->from_time, (long long)iv->to_time,
+            iv->from_id, iv->to_id, iv->change_count,
+            iv->pci_added, iv->pci_removed, iv->usb_added, iv->usb_removed,
+            iv->modules_added, risk_level_to_str(iv->max_severity));
+        if (n < 0 || (size_t)(w + n) >= size) {
+            return FG_ERROR;
+        }
+        w += n;
+    }
+
+    int n = snprintf(buffer + w, size - w,
+                     "%s]\n}\n", drift->interval_count > 0 ? "\n  " : "");
+    if (n < 0 || (size_t)(w + n) >= size) {
+        return FG_ERROR;
+    }
+    return FG_SUCCESS;
 }
 
 /* ============================================================================
