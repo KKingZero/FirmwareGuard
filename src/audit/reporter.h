@@ -1,8 +1,11 @@
 #ifndef FG_REPORTER_H
 #define FG_REPORTER_H
 
-#include "../core/probe.h"
+#include <stdbool.h>
+#include <stdio.h>
+#include "probe.h"
 #include "../block/blocker.h"
+#include "firmwareguard.h"
 
 /* Report format types */
 typedef enum {

@@ -2,7 +2,7 @@
 #define FG_TXT_SGX_DETECT_H
 
 #include "../../include/firmwareguard.h"
-#include "../core/msr.h"
+#include "msr.h"
 
 /* TXT-related MSR addresses */
 #define MSR_IA32_FEATURE_CONTROL    0x0000003A

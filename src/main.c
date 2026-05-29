@@ -1,4 +1,4 @@
-#include "core/probe.h"
+#include "probe.h"
 #include "block/blocker.h"
 #include "audit/reporter.h"
 #include "detection/smm_detect.h"
