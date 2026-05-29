@@ -60,3 +60,73 @@ int acpi_scan_telemetry(acpi_scan_result_t *result) {
 
     return FG_SUCCESS;
 }
+
+void acpi_print_result(const acpi_scan_result_t *result, bool verbose) {
+    if (!result) {
+        return;
+    }
+
+    printf("\n=== ACPI Telemetry Scan ===\n");
+    printf("ACPI tables found:    %d\n", result->table_count);
+    printf("FPDT (perf table):    %s\n", result->fpdt_present ? "present" : "absent");
+    printf("TPM2 table:           %s\n", result->tpm2_present ? "present" : "absent");
+    printf("DMAR (Intel IOMMU):   %s\n", result->dmar_present ? "present" : "absent");
+    printf("IVRS (AMD IOMMU):     %s\n", result->ivrs_present ? "present" : "absent");
+    printf("OEM/vendor tables:    %s\n", result->suspicious_oem_tables ? "present" : "absent");
+
+    if (result->finding_count > 0) {
+        printf("\nFindings:\n");
+        for (int i = 0; i < result->finding_count; i++) {
+            printf("  - %s\n", result->findings[i]);
+        }
+    } else if (verbose) {
+        printf("\nNo notable findings.\n");
+    }
+    printf("\n");
+}
+
+int acpi_result_to_json(const acpi_scan_result_t *result, char *buffer, size_t size) {
+    if (!result || !buffer) {
+        return FG_ERROR;
+    }
+
+    int written = snprintf(buffer, size,
+        "{\n"
+        "  \"table_count\": %d,\n"
+        "  \"fpdt_present\": %s,\n"
+        "  \"tpm2_present\": %s,\n"
+        "  \"dmar_present\": %s,\n"
+        "  \"ivrs_present\": %s,\n"
+        "  \"suspicious_oem_tables\": %s,\n"
+        "  \"findings\": [",
+        result->table_count,
+        result->fpdt_present ? "true" : "false",
+        result->tpm2_present ? "true" : "false",
+        result->dmar_present ? "true" : "false",
+        result->ivrs_present ? "true" : "false",
+        result->suspicious_oem_tables ? "true" : "false");
+
+    if (written < 0 || (size_t)written >= size) {
+        return FG_ERROR;
+    }
+
+    for (int i = 0; i < result->finding_count; i++) {
+        int n = snprintf(buffer + written, size - written,
+                         "%s\n    \"%s\"",
+                         i == 0 ? "" : ",",
+                         result->findings[i]);
+        if (n < 0 || (size_t)(written + n) >= size) {
+            return FG_ERROR;
+        }
+        written += n;
+    }
+
+    int n = snprintf(buffer + written, size - written,
+                     "%s]\n}\n",
+                     result->finding_count > 0 ? "\n  " : "");
+    if (n < 0 || (size_t)(written + n) >= size) {
+        return FG_ERROR;
+    }
+
+    return FG_SUCCESS;
+}

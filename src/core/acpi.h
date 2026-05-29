@@ -18,4 +18,10 @@ typedef struct {
 
 int acpi_scan_telemetry(acpi_scan_result_t *result);
 
+/* Print scan result in human-readable text form */
+void acpi_print_result(const acpi_scan_result_t *result, bool verbose);
+
+/* Serialize scan result to JSON. Returns FG_SUCCESS on success. */
+int acpi_result_to_json(const acpi_scan_result_t *result, char *buffer, size_t size);
+
 #endif /* FG_ACPI_H */

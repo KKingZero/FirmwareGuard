@@ -22,4 +22,10 @@ typedef struct {
 
 int nic_scan(nic_scan_result_t *result);
 
+/* Print scan result in human-readable text form */
+void nic_print_result(const nic_scan_result_t *result, bool verbose);
+
+/* Serialize scan result to JSON. Returns FG_SUCCESS on success. */
+int nic_result_to_json(const nic_scan_result_t *result, char *buffer, size_t size);
+
 #endif /* FG_NIC_H */

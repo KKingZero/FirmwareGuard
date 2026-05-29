@@ -180,3 +180,91 @@ int probe_amd_psp(amd_psp_info_t *info) {
 
     return info->present ? FG_SUCCESS : FG_NOT_FOUND;
 }
+
+void intel_me_print(const intel_me_info_t *info, bool verbose) {
+    if (!info) {
+        return;
+    }
+
+    printf("\n=== Intel Management Engine (ME) ===\n");
+    printf("Present:     %s\n", info->present ? "yes" : "no");
+    printf("Active:      %s\n", info->active ? "yes" : "no");
+    printf("AMT present: %s\n", info->amt_present ? "yes" : "no");
+    printf("HAP avail:   %s\n", info->hap_available ? "yes" : "no");
+    if (info->version[0]) {
+        printf("Version:     %s\n", info->version);
+    }
+    if (info->device_id[0]) {
+        printf("Device ID:   %s\n", info->device_id);
+    }
+    if (info->details[0] || verbose) {
+        printf("Details:     %s\n", info->details);
+    }
+    printf("\n");
+}
+
+void amd_psp_print(const amd_psp_info_t *info, bool verbose) {
+    if (!info) {
+        return;
+    }
+
+    printf("\n=== AMD Platform Security Processor (PSP) ===\n");
+    printf("Present:       %s\n", info->present ? "yes" : "no");
+    printf("Active:        %s\n", info->active ? "yes" : "no");
+    printf("SEV supported: %s\n", info->sev_supported ? "yes" : "no");
+    printf("fTPM hint:     %s\n", info->ftpm_hint ? "yes" : "no");
+    if (info->version[0]) {
+        printf("Version:       %s\n", info->version);
+    }
+    if (info->details[0] || verbose) {
+        printf("Details:       %s\n", info->details);
+    }
+    printf("\n");
+}
+
+int intel_me_to_json(const intel_me_info_t *info, char *buffer, size_t size) {
+    if (!info || !buffer) {
+        return FG_ERROR;
+    }
+
+    int n = snprintf(buffer, size,
+        "{\n"
+        "  \"present\": %s,\n"
+        "  \"active\": %s,\n"
+        "  \"amt_present\": %s,\n"
+        "  \"hap_available\": %s,\n"
+        "  \"version\": \"%s\",\n"
+        "  \"device_id\": \"%s\",\n"
+        "  \"details\": \"%s\"\n"
+        "}\n",
+        info->present ? "true" : "false",
+        info->active ? "true" : "false",
+        info->amt_present ? "true" : "false",
+        info->hap_available ? "true" : "false",
+        info->version, info->device_id, info->details);
+
+    return (n < 0 || (size_t)n >= size) ? FG_ERROR : FG_SUCCESS;
+}
+
+int amd_psp_to_json(const amd_psp_info_t *info, char *buffer, size_t size) {
+    if (!info || !buffer) {
+        return FG_ERROR;
+    }
+
+    int n = snprintf(buffer, size,
+        "{\n"
+        "  \"present\": %s,\n"
+        "  \"active\": %s,\n"
+        "  \"sev_supported\": %s,\n"
+        "  \"ftpm_hint\": %s,\n"
+        "  \"version\": \"%s\",\n"
+        "  \"details\": \"%s\"\n"
+        "}\n",
+        info->present ? "true" : "false",
+        info->active ? "true" : "false",
+        info->sev_supported ? "true" : "false",
+        info->ftpm_hint ? "true" : "false",
+        info->version, info->details);
+
+    return (n < 0 || (size_t)n >= size) ? FG_ERROR : FG_SUCCESS;
+}

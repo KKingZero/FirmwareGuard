@@ -1,4 +1,7 @@
 #include "probe.h"
+#include "core/acpi.h"
+#include "core/me_psp.h"
+#include "core/nic.h"
 #include "block/blocker.h"
 #include "audit/reporter.h"
 #include "detection/smm_detect.h"
@@ -34,6 +37,10 @@ static void print_usage(const char *prog_name) {
     printf("  baseline-capture  Capture comprehensive system baseline snapshot\n");
     printf("  baseline-compare  Compare current state against saved baseline\n");
     printf("  implant-scan      Full hardware implant detection scan\n");
+    printf("  acpi-scan         Scan ACPI tables for firmware telemetry indicators\n");
+    printf("  nic-scan          Profile network interfaces (WoL, Intel AMT, firmware)\n");
+    printf("  intel-me          Detect Intel Management Engine / AMT status\n");
+    printf("  amd-psp           Detect AMD Platform Security Processor / SEV status\n");
     printf("  compliance        Assess compliance against security frameworks\n");
     printf("\n");
     printf("Options:\n");
@@ -809,6 +816,91 @@ static int cmd_implant_scan(int argc, char **argv, bool json_output, bool verbos
     return FG_SUCCESS;
 }
 
+static int cmd_acpi_scan(int argc, char **argv, bool json_output, bool verbose) {
+    (void)argc; (void)argv;
+    acpi_scan_result_t result;
+    int ret = acpi_scan_telemetry(&result);
+    if (ret == FG_NOT_FOUND) {
+        FG_WARN("ACPI tables not available (/sys/firmware/acpi/tables missing)");
+        return ret;
+    }
+    if (ret != FG_SUCCESS) {
+        FG_LOG_ERROR("ACPI telemetry scan failed");
+        return ret;
+    }
+
+    if (json_output) {
+        char json_buffer[8192];
+        if (acpi_result_to_json(&result, json_buffer, sizeof(json_buffer)) == FG_SUCCESS) {
+            printf("%s", json_buffer);
+        }
+    } else {
+        acpi_print_result(&result, verbose);
+    }
+    return FG_SUCCESS;
+}
+
+static int cmd_nic_scan(int argc, char **argv, bool json_output, bool verbose) {
+    (void)argc; (void)argv;
+    nic_scan_result_t result;
+    int ret = nic_scan(&result);
+    if (ret != FG_SUCCESS) {
+        FG_LOG_ERROR("NIC telemetry scan failed");
+        return ret;
+    }
+
+    if (json_output) {
+        char json_buffer[16384];
+        if (nic_result_to_json(&result, json_buffer, sizeof(json_buffer)) == FG_SUCCESS) {
+            printf("%s", json_buffer);
+        }
+    } else {
+        nic_print_result(&result, verbose);
+    }
+    return FG_SUCCESS;
+}
+
+static int cmd_intel_me(int argc, char **argv, bool json_output, bool verbose) {
+    (void)argc; (void)argv;
+    intel_me_info_t info;
+    int ret = probe_intel_me(&info);
+    /* FG_NOT_FOUND simply means no ME surface detected; still report it */
+    if (ret != FG_SUCCESS && ret != FG_NOT_FOUND) {
+        FG_LOG_ERROR("Intel ME probe failed");
+        return ret;
+    }
+
+    if (json_output) {
+        char json_buffer[2048];
+        if (intel_me_to_json(&info, json_buffer, sizeof(json_buffer)) == FG_SUCCESS) {
+            printf("%s", json_buffer);
+        }
+    } else {
+        intel_me_print(&info, verbose);
+    }
+    return FG_SUCCESS;
+}
+
+static int cmd_amd_psp(int argc, char **argv, bool json_output, bool verbose) {
+    (void)argc; (void)argv;
+    amd_psp_info_t info;
+    int ret = probe_amd_psp(&info);
+    if (ret != FG_SUCCESS && ret != FG_NOT_FOUND) {
+        FG_LOG_ERROR("AMD PSP probe failed");
+        return ret;
+    }
+
+    if (json_output) {
+        char json_buffer[2048];
+        if (amd_psp_to_json(&info, json_buffer, sizeof(json_buffer)) == FG_SUCCESS) {
+            printf("%s", json_buffer);
+        }
+    } else {
+        amd_psp_print(&info, verbose);
+    }
+    return FG_SUCCESS;
+}
+
 static int cmd_compliance(int argc, char **argv, bool json_output, const char *output_file) {
     compliance_result_t result;
     FILE *output = stdout;
@@ -975,6 +1067,14 @@ int main(int argc, char **argv) {
         return cmd_baseline_compare(argc, argv, json_output, verbose, output_file);
     } else if (strcmp(command, "implant-scan") == 0) {
         return cmd_implant_scan(argc, argv, json_output, verbose);
+    } else if (strcmp(command, "acpi-scan") == 0) {
+        return cmd_acpi_scan(argc, argv, json_output, verbose);
+    } else if (strcmp(command, "nic-scan") == 0) {
+        return cmd_nic_scan(argc, argv, json_output, verbose);
+    } else if (strcmp(command, "intel-me") == 0) {
+        return cmd_intel_me(argc, argv, json_output, verbose);
+    } else if (strcmp(command, "amd-psp") == 0) {
+        return cmd_amd_psp(argc, argv, json_output, verbose);
     } else if (strcmp(command, "compliance") == 0) {
         return cmd_compliance(argc, argv, json_output, output_file);
     } else {

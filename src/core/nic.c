@@ -142,3 +142,70 @@ int nic_scan(nic_scan_result_t *result) {
     closedir(dir);
     return FG_SUCCESS;
 }
+
+void nic_print_result(const nic_scan_result_t *result, bool verbose) {
+    if (!result) {
+        return;
+    }
+
+    printf("\n=== Network Interface Telemetry Scan ===\n");
+    printf("Interfaces found: %d\n", result->count);
+
+    for (int i = 0; i < result->count; i++) {
+        const nic_info_t *nic = &result->nics[i];
+        printf("\n  [%s]\n", nic->name);
+        printf("    vendor:device : %s:%s\n", nic->vendor, nic->device);
+        printf("    driver        : %s\n", nic->driver[0] ? nic->driver : "(unknown)");
+        printf("    wake-on-lan   : %s\n", nic->wake_on_lan ? "enabled" : "disabled");
+        printf("    firmware node : %s\n", nic->firmware_node ? "yes" : "no");
+        if (nic->intel_amt_hint) {
+            printf("    Intel AMT     : possible (device-ID hint)\n");
+        } else if (verbose) {
+            printf("    Intel AMT     : not indicated\n");
+        }
+    }
+    printf("\n");
+}
+
+int nic_result_to_json(const nic_scan_result_t *result, char *buffer, size_t size) {
+    if (!result || !buffer) {
+        return FG_ERROR;
+    }
+
+    int written = snprintf(buffer, size,
+        "{\n  \"count\": %d,\n  \"interfaces\": [", result->count);
+    if (written < 0 || (size_t)written >= size) {
+        return FG_ERROR;
+    }
+
+    for (int i = 0; i < result->count; i++) {
+        const nic_info_t *nic = &result->nics[i];
+        int n = snprintf(buffer + written, size - written,
+            "%s\n    {\n"
+            "      \"name\": \"%s\",\n"
+            "      \"vendor\": \"%s\",\n"
+            "      \"device\": \"%s\",\n"
+            "      \"driver\": \"%s\",\n"
+            "      \"wake_on_lan\": %s,\n"
+            "      \"intel_amt_hint\": %s,\n"
+            "      \"firmware_node\": %s\n"
+            "    }",
+            i == 0 ? "" : ",",
+            nic->name, nic->vendor, nic->device, nic->driver,
+            nic->wake_on_lan ? "true" : "false",
+            nic->intel_amt_hint ? "true" : "false",
+            nic->firmware_node ? "true" : "false");
+        if (n < 0 || (size_t)(written + n) >= size) {
+            return FG_ERROR;
+        }
+        written += n;
+    }
+
+    int n = snprintf(buffer + written, size - written,
+                     "%s]\n}\n", result->count > 0 ? "\n  " : "");
+    if (n < 0 || (size_t)(written + n) >= size) {
+        return FG_ERROR;
+    }
+
+    return FG_SUCCESS;
+}
