@@ -2,13 +2,29 @@
 # Low-level firmware telemetry detection, analysis, and protection framework
 # OFFLINE-ONLY: No network connectivity
 
-CC = gcc
-# Security hardening flags
-SECURITY_FLAGS = -fstack-protector-strong -D_FORTIFY_SOURCE=2 \
-                 -Wformat -Wformat-security -fPIE \
-                 -Wshadow -Wpointer-arith -Wcast-qual
-CFLAGS = -Wall -Wextra -O2 -std=gnu11 -Iinclude -D_GNU_SOURCE $(SECURITY_FLAGS)
-LDFLAGS = -lm -lsqlite3 -lssl -lcrypto -lpthread -pie -Wl,-z,relro,-z,now -Wl,-z,noexecstack
+CC ?= cc
+
+# OS-aware build flags. Linux/glibc gets full hardening (FORTIFY + GNU linker
+# protections). macOS (clang/ld64) omits the GNU-only flags it rejects and links
+# against Homebrew OpenSSL (macOS ships libsqlite3 but no OpenSSL dev headers).
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+  SECURITY_FLAGS = -fstack-protector-strong \
+                   -Wformat -Wformat-security \
+                   -Wshadow -Wpointer-arith -Wcast-qual
+  BREW_OPENSSL := $(shell brew --prefix openssl@3 2>/dev/null || brew --prefix openssl 2>/dev/null)
+  CFLAGS_OS  = $(if $(BREW_OPENSSL),-I$(BREW_OPENSSL)/include)
+  LDFLAGS_OS = $(if $(BREW_OPENSSL),-L$(BREW_OPENSSL)/lib)
+else
+  SECURITY_FLAGS = -fstack-protector-strong -D_FORTIFY_SOURCE=2 \
+                   -Wformat -Wformat-security -fPIE \
+                   -Wshadow -Wpointer-arith -Wcast-qual
+  CFLAGS_OS  =
+  LDFLAGS_OS = -pie -Wl,-z,relro,-z,now -Wl,-z,noexecstack
+endif
+
+CFLAGS = -Wall -Wextra -O2 -std=gnu11 -Iinclude -D_GNU_SOURCE $(SECURITY_FLAGS) $(CFLAGS_OS)
+LDFLAGS = -lm -lsqlite3 -lssl -lcrypto -lpthread $(LDFLAGS_OS)
 
 # Opt-in strict mode (CI): treat warnings as errors. Usage: make STRICT=1
 ifeq ($(STRICT),1)
@@ -20,7 +36,8 @@ endif
 # TXT/SGX/ME/baseline) use CPUID/RDMSR and are excluded from the build entirely.
 # Override with: make ARCH=aarch64  (e.g. to simulate the ARM build on x86).
 ARCH ?= $(shell uname -m)
-ifeq ($(filter aarch64 arm armv7l armv6l,$(ARCH)),)
+# macOS Apple Silicon reports "arm64" from uname -m.
+ifeq ($(filter aarch64 arm64 arm armv7l armv6l,$(ARCH)),)
   FG_ARM := 0
 else
   FG_ARM := 1

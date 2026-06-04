@@ -59,11 +59,24 @@ are absent.
 
 ## ARM / aarch64 Build (this branch)
 
-On `aarch64`/`arm*` hosts (or with `make ARCH=aarch64`), the Makefile builds a
-reduced, architecture-neutral binary. The x86-only modules (MSR, SMM, Boot Guard,
-TXT/SGX, ME/PSP, baseline, implant, compliance, HECI/SPI) use CPUID/RDMSR and are
-excluded from the build entirely; their command names remain registered but
-resolve to a clean "not applicable on this architecture" stub.
+On `aarch64`/`arm*`/`arm64` hosts (or with `make ARCH=aarch64`), the Makefile
+builds a reduced, architecture-neutral binary. The x86-only modules (MSR, SMM,
+Boot Guard, TXT/SGX, ME/PSP, baseline, implant, compliance, HECI/SPI) use
+CPUID/RDMSR and are excluded from the build entirely; their command names remain
+registered but resolve to a clean "not applicable on this architecture" stub.
+
+### macOS (Apple Silicon)
+
+The same ARM build runs on macOS: Apple Silicon reports `arm64` from `uname -m`,
+so `make` selects the reduced build automatically. The Makefile is OS-aware
+(`uname -s`): on Darwin it drops the GNU-only hardening/linker flags clang/ld64
+rejects and links against Homebrew OpenSSL (`brew install openssl@3`; macOS ships
+libsqlite3). The OS-portable commands — `cve-check`, `threat-scan`,
+`rootkit-scan`, `integrity-verify` (pure SQLite/OpenSSL/file IO) — are the
+meaningful surface on macOS; the Linux-sysfs probes (`acpi-scan`, `nic-scan`,
+`uefi-enum`, `arm-detect`) compile and run but find nothing without `/sys`.
+Validated by the `macos-build` CI job. (macOS Intel is out of scope — it would
+select the x86 build, which needs Linux MSR/sysfs.)
 
 ARM commands with real handlers:
 

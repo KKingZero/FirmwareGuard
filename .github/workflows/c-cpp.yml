@@ -77,3 +77,24 @@ jobs:
         if ./firmwareguard smm-scan; then echo "smm-scan should have failed on ARM"; exit 1; fi
     - name: ARM-safe sidecar tests
       run: make -f Makefile.arm test CC=/usr/bin/gcc
+
+  macos-build:
+    # Real Apple Silicon (arm64) build: uname -m reports "arm64" -> FG_ARM=1, so
+    # this exercises the reduced ARM build natively on Darwin (clang/ld64 + the
+    # macOS-specific flag/OpenSSL handling in the Makefile).
+    runs-on: macos-14
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install OpenSSL (Homebrew)
+      run: brew install openssl@3
+    - name: Build (native arm64 -> ARM build)
+      run: make
+    - name: Smoke-test the macOS/ARM command surface
+      run: |
+        ./firmwareguard --help | grep -q "ARM build"
+        # OS-portable database/file commands must work on macOS
+        ./firmwareguard cve-check "Intel Management Engine (ME)" 6.0.0
+        ./firmwareguard threat-scan firmwareguard
+        ./firmwareguard integrity-verify firmwareguard
+        # x86-only command must report not-applicable (non-zero exit)
+        if ./firmwareguard smm-scan; then echo "smm-scan should have failed on ARM/macOS"; exit 1; fi
