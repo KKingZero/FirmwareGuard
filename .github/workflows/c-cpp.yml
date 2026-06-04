@@ -15,12 +15,40 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential libssl-dev libsqlite3-dev
+        sudo apt-get install -y build-essential libssl-dev libsqlite3-dev cppcheck clang
     - name: Build userspace CLI
       run: make CC=/usr/bin/gcc
     - name: Run unit tests
       run: CC=/usr/bin/gcc ./tools/run-tests.sh
     - name: Run ARM-safe tests
       run: make -f Makefile.arm test CC=/usr/bin/gcc
-    - name: Static analysis hook
+    - name: Static analysis (cppcheck)
       run: make check
+    - name: Strict build (advisory — legacy warnings being burned down)
+      continue-on-error: true
+      run: make clean && make STRICT=1 CC=/usr/bin/gcc
+
+  sanitizers:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libssl-dev libsqlite3-dev clang
+    - name: ASan/UBSan build
+      run: make asan CC=/usr/bin/gcc
+    - name: Run a representative command set under ASan/UBSan
+      run: |
+        export ASAN_OPTIONS=detect_leaks=0
+        ./firmwareguard acpi-scan --json
+        ./firmwareguard nic-scan --json
+        ./firmwareguard baseline-capture --json
+        ./firmwareguard cve-check "Intel Management Engine (ME)" 6.0.0
+        ./firmwareguard threat-scan firmwareguard
+        ./firmwareguard integrity-verify firmwareguard
+        ./firmwareguard compliance --json
+    - name: Build fuzz harnesses (clang/libFuzzer)
+      run: make fuzz
+    - name: Fuzz smoke run (30s)
+      run: ./build/fuzz_hash -max_total_time=30 -timeout=10

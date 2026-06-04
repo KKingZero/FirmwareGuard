@@ -8,24 +8,19 @@ This document outlines the comprehensive testing strategy for FirmwareGuard, cov
 Unit tests focus on individual modules and functions to verify their correctness in isolation.
 
 ### Execution
-Unit tests are typically run from the build directory after compilation. Specific test binaries are generated for critical modules.
+The full unit/integration suite is driven by `tools/run-tests.sh` (also exposed
+as `make unit`). It compiles and runs each test against the shipped sources:
 
 ```bash
-# Test safety framework
-./test_safety --dry-run
-./test_safety --backup-restore
+# Run all suites (must be run from the repo root — db tests read data/*.json)
+./tools/run-tests.sh        # or: make unit
 
-# Test configuration parsing
-./test_config --parse-valid
-./test_config --parse-invalid
-
-# Test UEFI operations (requires EFI system)
-sudo ./test_uefi --read-variables
-sudo ./test_uefi --hap-detection
-
-# Test GRUB parsing
-./test_grub --parse
-./test_grub --param-add-remove
+# Suites currently run (gating):
+#   test-safety-hash    — SHA-256 / backup safety (src/safety)
+#   test-uefi-safety    — UEFI variable + cpuinfo parsing (src/uefi)
+#   test_hashes         — FNV-1a fingerprint parsers (src/detection/fg_hash.c)
+#   test-cve-db         — CVE database (seeds from data/cve_firmware.json)
+#   test-threat-intel   — threat-intel IOC database (data/threat_intel.json)
 ```
 
 ### Coverage
@@ -103,20 +98,26 @@ valgrind --leak-check=full ./firmwareguard scan
 Compile with ASan to detect memory errors at runtime.
 
 ```bash
-# Recompile with ASan (example for GCC)
-gcc -fsanitize=address -g -O1 src/*.c -o firmwareguard_asan -Iinclude -lmnl -lcap
+# Rebuild the whole binary with ASan + UBSan
+make asan
 
-# Run the instrumented binary
-./firmwareguard_asan scan
+# Run any command under the instrumented binary
+ASAN_OPTIONS=detect_leaks=0 ./firmwareguard acpi-scan --json
 ```
 
 #### Fuzzing
 Use fuzzing tools like American Fuzzy Lop (AFL) to find crashes and vulnerabilities by feeding malformed inputs to the program's parsers (e.g., config files, CLI arguments).
 
 ```bash
-# Example AFL setup for a config file parser
-afl-fuzz -i testcases/config_inputs/ -o findings/config_fuzz/ -- ./firmwareguard apply --config @@
+# Build the libFuzzer harnesses (clang + libFuzzer, non-gating)
+make fuzz
+
+# Fuzz the FNV-1a fingerprint parsers (buffer+length entry points)
+./build/fuzz_hash -max_total_time=30
 ```
+
+Harness sources live in `tests/fuzz/`. New parsers that take a `(buffer, len)`
+pair should get a matching `LLVMFuzzerTestOneInput` harness there.
 
 ## 5. Continuous Integration (CI)
 
@@ -139,4 +140,4 @@ The project utilizes CI pipelines to automate testing on every code commit.
 
 ---
 
-**Last Updated:** 2025-11-22
+**Last Updated:** 2026-06-03
