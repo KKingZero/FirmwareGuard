@@ -46,7 +46,7 @@ static const char *SCHEMA_SQL =
     "  target_platforms TEXT,"
     "  target_vendors TEXT,"
     "  active INTEGER DEFAULT 1,"
-    "  references TEXT,"
+    "  \"references\" TEXT,"
     "  created_at INTEGER DEFAULT (strftime('%s', 'now')),"
     "  updated_at INTEGER DEFAULT (strftime('%s', 'now'))"
     ");"
@@ -173,7 +173,7 @@ static int prepare_statements(void)
     /* Insert family statement */
     const char *insert_family_sql =
         "INSERT INTO malware_families (name, type, description, first_seen, last_seen, "
-        "target_platforms, target_vendors, active, references) "
+        "target_platforms, target_vendors, active, \"references\") "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(name) DO UPDATE SET updated_at = strftime('%s', 'now');";
 
@@ -187,7 +187,7 @@ static int prepare_statements(void)
     const char *check_hash_sql =
         "SELECT i.id, i.family_id, i.ioc_type, i.value, i.description, i.confidence, "
         "       i.source, i.verified, i.context, "
-        "       f.name, f.type, f.description, f.active, f.references "
+        "       f.name, f.type, f.description, f.active, f.\"references\" "
         "FROM threat_iocs i "
         "JOIN malware_families f ON i.family_id = f.id "
         "WHERE i.ioc_type = ? AND (i.value = ? OR i.value = ?) "
@@ -198,7 +198,7 @@ static int prepare_statements(void)
     const char *check_pattern_sql =
         "SELECT i.id, i.family_id, i.ioc_type, i.value, i.description, i.confidence, "
         "       i.source, i.verified, i.context, "
-        "       f.name, f.type, f.description, f.active, f.references "
+        "       f.name, f.type, f.description, f.active, f.\"references\" "
         "FROM threat_iocs i "
         "JOIN malware_families f ON i.family_id = f.id "
         "WHERE i.ioc_type = ? AND ? LIKE '%' || i.value || '%' "
@@ -208,7 +208,7 @@ static int prepare_statements(void)
     /* Get family by name */
     const char *get_family_sql =
         "SELECT id, name, type, description, first_seen, last_seen, "
-        "       target_platforms, target_vendors, active, references, "
+        "       target_platforms, target_vendors, active, \"references\", "
         "       created_at, updated_at "
         "FROM malware_families WHERE name = ?;";
 

@@ -9,6 +9,11 @@ SECURITY_FLAGS = -fstack-protector-strong -D_FORTIFY_SOURCE=2 \
                  -Wshadow -Wpointer-arith -Wcast-qual
 CFLAGS = -Wall -Wextra -O2 -std=gnu11 -Iinclude -D_GNU_SOURCE $(SECURITY_FLAGS)
 LDFLAGS = -lm -lsqlite3 -lssl -lcrypto -lpthread -pie -Wl,-z,relro,-z,now -Wl,-z,noexecstack
+
+# Opt-in strict mode (CI): treat warnings as errors. Usage: make STRICT=1
+ifeq ($(STRICT),1)
+CFLAGS += -Werror
+endif
 INSTALL = install
 INSTALL_DIR = /usr/local/bin
 SYSTEMD_DIR = /etc/systemd/system
@@ -35,6 +40,7 @@ MONITOR_DIR = $(SRC_DIR)/monitor
 INTEGRITY_DIR = $(SRC_DIR)/integrity
 GHIDRA_DIR = $(SRC_DIR)/ghidra
 COMPLIANCE_DIR = $(SRC_DIR)/compliance
+CLI_DIR = $(SRC_DIR)/cli
 KERNEL_DIR = kernel
 
 # Target binary
@@ -72,7 +78,8 @@ DETECT_SRCS = $(DETECT_DIR)/smm_detect.c \
               $(DETECT_DIR)/txt_sgx_detect.c \
               $(DETECT_DIR)/baseline_capture.c \
               $(DETECT_DIR)/implant_detect.c \
-              $(DETECT_DIR)/uefi_integrity.c
+              $(DETECT_DIR)/uefi_integrity.c \
+              $(DETECT_DIR)/fg_hash.c
 
 # Migration sources
 MIGRATE_SRCS = $(MIGRATE_DIR)/coreboot_migrate.c
@@ -101,6 +108,15 @@ GHIDRA_SRCS = $(GHIDRA_DIR)/ghidra_wrapper.c
 COMPLIANCE_SRCS = $(COMPLIANCE_DIR)/compliance.c \
                   $(COMPLIANCE_DIR)/nist_800_171.c
 
+# CLI dispatch + command handlers
+CLI_SRCS = $(CLI_DIR)/cli_table.c \
+           $(CLI_DIR)/cli_scan.c \
+           $(CLI_DIR)/cli_firmware.c \
+           $(CLI_DIR)/cli_trustedboot.c \
+           $(CLI_DIR)/cli_baseline.c \
+           $(CLI_DIR)/cli_detect.c \
+           $(CLI_DIR)/cli_modules.c
+
 # cJSON library
 CJSON_SRC = $(SRC_DIR)/cJSON.c
 
@@ -110,7 +126,9 @@ MAIN_SRC = $(SRC_DIR)/main.c
 # but are not linked until they have CLI wiring and build coverage.
 ALL_SRCS = $(CORE_SRCS) $(BLOCK_SRCS) $(AUDIT_SRCS) $(SAFETY_SRCS) \
            $(CONFIG_MGMT_SRCS) $(UEFI_SRCS) $(GRUB_SRCS) $(PATTERN_SRCS) \
-           $(DETECT_SRCS) $(COMPLIANCE_SRCS) $(CJSON_SRC) $(MAIN_SRC)
+           $(DETECT_SRCS) $(COMPLIANCE_SRCS) \
+           $(DATABASE_SRCS) $(ROOTKIT_SRCS) $(INTEGRITY_SRCS) $(MONITOR_SRCS) \
+           $(CLI_SRCS) $(CJSON_SRC) $(MAIN_SRC)
 
 # Object files
 CORE_OBJS = $(patsubst $(CORE_DIR)/%.c,$(BUILD_DIR)/core_%.o,$(CORE_SRCS))
@@ -130,12 +148,17 @@ MONITOR_OBJS = $(patsubst $(MONITOR_DIR)/%.c,$(BUILD_DIR)/monitor_%.o,$(MONITOR_
 INTEGRITY_OBJS = $(patsubst $(INTEGRITY_DIR)/%.c,$(BUILD_DIR)/integrity_%.o,$(INTEGRITY_SRCS))
 GHIDRA_OBJS = $(patsubst $(GHIDRA_DIR)/%.c,$(BUILD_DIR)/ghidra_%.o,$(GHIDRA_SRCS))
 COMPLIANCE_OBJS = $(patsubst $(COMPLIANCE_DIR)/%.c,$(BUILD_DIR)/compliance_%.o,$(COMPLIANCE_SRCS))
+CLI_OBJS = $(patsubst $(CLI_DIR)/%.c,$(BUILD_DIR)/cli_%.o,$(CLI_SRCS))
 CJSON_OBJ = $(BUILD_DIR)/cJSON.o
 MAIN_OBJ = $(BUILD_DIR)/main.o
 
+# Phase-4 modules wired into the default CLI (cve/threat/rootkit/integrity/monitor).
+# Ghidra, migration, and live-dump remain in-tree but unlinked (see STATUS.md).
 ALL_OBJS = $(CORE_OBJS) $(BLOCK_OBJS) $(AUDIT_OBJS) $(SAFETY_OBJS) \
            $(CONFIG_MGMT_OBJS) $(UEFI_OBJS) $(GRUB_OBJS) $(PATTERN_OBJS) \
-           $(DETECT_OBJS) $(COMPLIANCE_OBJS) $(CJSON_OBJ) $(MAIN_OBJ)
+           $(DETECT_OBJS) $(COMPLIANCE_OBJS) \
+           $(DATABASE_OBJS) $(ROOTKIT_OBJS) $(INTEGRITY_OBJS) $(MONITOR_OBJS) \
+           $(CLI_OBJS) $(CJSON_OBJ) $(MAIN_OBJ)
 
 # Default target
 .PHONY: all
@@ -260,6 +283,10 @@ $(BUILD_DIR)/compliance_%.o: $(COMPLIANCE_DIR)/%.c
 	@echo "Compiling $<..."
 	@$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/cli_%.o: $(CLI_DIR)/%.c
+	@echo "Compiling $<..."
+	@$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/cJSON.o: $(SRC_DIR)/cJSON.c
 	@echo "Compiling $<..."
 	@$(CC) $(CFLAGS) -Wno-unused-parameter -c $< -o $@
@@ -366,6 +393,31 @@ check:
 	@echo "Running static analysis..."
 	@which cppcheck >/dev/null 2>&1 && cppcheck --enable=all --suppress=missingIncludeSystem $(SRC_DIR) || echo "cppcheck not installed"
 	@echo ""
+
+# Run the full unit/integration test suite
+.PHONY: unit
+unit:
+	@CC=$(CC) ./tools/run-tests.sh
+
+# Address/UndefinedBehavior sanitizer build (rebuilds the whole binary)
+.PHONY: asan
+asan: CFLAGS += -fsanitize=address,undefined -fno-omit-frame-pointer -g -O1
+asan: LDFLAGS += -fsanitize=address,undefined
+asan: clean all
+	@echo "ASan/UBSan build complete: ./$(TARGET)"
+
+# Build libFuzzer harnesses (clang-only, non-gating).
+.PHONY: fuzz
+fuzz:
+	@if ! command -v clang >/dev/null 2>&1; then \
+	    echo "clang not found; skipping fuzz build (non-gating)"; \
+	else \
+	    mkdir -p $(BUILD_DIR); \
+	    clang -g -O1 -std=gnu11 -Iinclude -fsanitize=fuzzer,address,undefined \
+	        tests/fuzz/fuzz_hash.c $(DETECT_DIR)/fg_hash.c -o $(BUILD_DIR)/fuzz_hash && \
+	    echo "Built $(BUILD_DIR)/fuzz_hash" && \
+	    echo "Run: ./$(BUILD_DIR)/fuzz_hash -max_total_time=30"; \
+	fi
 
 # Count lines of code
 .PHONY: stats

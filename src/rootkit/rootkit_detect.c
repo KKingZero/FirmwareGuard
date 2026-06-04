@@ -5,7 +5,7 @@
  */
 
 #include "rootkit_detect.h"
-#include "../cJSON.h"
+#include "cJSON.h"
 #include "../../include/firmwareguard.h"
 
 #include <stdio.h>

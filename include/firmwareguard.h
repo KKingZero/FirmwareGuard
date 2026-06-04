@@ -71,6 +71,9 @@ typedef struct {
 #define FG_INFO(fmt, ...)  FG_LOG("INFO", fmt, ##__VA_ARGS__)
 #define FG_WARN(fmt, ...)  FG_LOG("WARN", fmt, ##__VA_ARGS__)
 #define FG_LOG_ERROR(fmt, ...) FG_LOG("ERROR", fmt, ##__VA_ARGS__)
+/* Aliases for the FG_LOG_* naming used by some modules */
+#define FG_LOG_INFO(fmt, ...)  FG_LOG("INFO", fmt, ##__VA_ARGS__)
+#define FG_LOG_WARN(fmt, ...)  FG_LOG("WARN", fmt, ##__VA_ARGS__)
 
 /* Require root privileges */
 static inline int fg_require_root(void) {

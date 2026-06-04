@@ -1,4 +1,5 @@
 #include "baseline_capture.h"
+#include "fg_hash.h"
 #include "msr.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,22 +27,7 @@ static const char* risk_level_to_str(risk_level_t level) {
     }
 }
 
-/* Helper to compute simple hash (FNV-1a based) */
-static void compute_hash(const uint8_t *data, size_t len, char *hex_out) {
-    uint64_t h[4] = {0xcbf29ce484222325ULL, 0x84222325cbf29ce4ULL,
-                     0xf29ce484222325cbULL, 0x222325cbf29ce484ULL};
-    const uint64_t prime = 0x100000001b3ULL;
-
-    for (size_t i = 0; i < len; i++) {
-        int idx = i % 4;
-        h[idx] ^= data[i];
-        h[idx] *= prime;
-    }
-
-    snprintf(hex_out, 65, "%016llx%016llx%016llx%016llx",
-             (unsigned long long)h[0], (unsigned long long)h[1],
-             (unsigned long long)h[2], (unsigned long long)h[3]);
-}
+/* compute_hash() now lives in fg_hash.c (shared, testable) */
 
 /* Read single-line sysfs/procfs value */
 static int read_sysfs_value(const char *path, char *buf, size_t size) {

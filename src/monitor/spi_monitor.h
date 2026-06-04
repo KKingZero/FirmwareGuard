@@ -25,6 +25,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>   /* size_t */
 
 /* SPI Event Types
  * Bitmask flags indicating types of SPI security events

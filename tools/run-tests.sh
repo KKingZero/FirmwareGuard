@@ -96,6 +96,71 @@ else
     TOTAL_FAIL=$((TOTAL_FAIL + 1))
 fi
 
+# --- Test 3: FNV-1a hash unit tests (parser fingerprints) ---
+echo ""
+echo "--- Compiling test_hashes ---"
+if $CC $CFLAGS \
+    -o "$BUILD_DIR/test_hashes" \
+    tests/test_hashes.c src/detection/fg_hash.c 2>&1; then
+    echo "  Compiled OK"
+else
+    echo "  COMPILATION FAILED"
+    exit 1
+fi
+
+echo ""
+echo "--- Running test_hashes ---"
+if "$BUILD_DIR/test_hashes"; then
+    TOTAL_PASS=$((TOTAL_PASS + 1))
+else
+    TOTAL_FAIL=$((TOTAL_FAIL + 1))
+fi
+
+# Database tests need SQLite/OpenSSL/pthread in addition to the base flags.
+DB_LDFLAGS="$LDFLAGS -lsqlite3 -lssl -lpthread"
+
+# --- Test 4: CVE database ---
+echo ""
+echo "--- Compiling test-cve-db ---"
+if $CC $CFLAGS \
+    -o "$BUILD_DIR/test-cve-db" \
+    tools/test-cve-db.c src/database/cve_db.c src/cJSON.c \
+    $DB_LDFLAGS 2>&1; then
+    echo "  Compiled OK"
+else
+    echo "  COMPILATION FAILED"
+    exit 1
+fi
+
+echo ""
+echo "--- Running test-cve-db (seeds from data/cve_firmware.json) ---"
+if "$BUILD_DIR/test-cve-db"; then
+    TOTAL_PASS=$((TOTAL_PASS + 1))
+else
+    TOTAL_FAIL=$((TOTAL_FAIL + 1))
+fi
+
+# --- Test 5: Threat-intel database ---
+echo ""
+echo "--- Compiling test-threat-intel ---"
+if $CC $CFLAGS \
+    -o "$BUILD_DIR/test-threat-intel" \
+    tools/test-threat-intel.c src/database/threat_intel.c src/cJSON.c \
+    $DB_LDFLAGS 2>&1; then
+    echo "  Compiled OK"
+else
+    echo "  COMPILATION FAILED"
+    exit 1
+fi
+
+echo ""
+echo "--- Running test-threat-intel (data/threat_intel.json) ---"
+if "$BUILD_DIR/test-threat-intel" data/threat_intel.json; then
+    TOTAL_PASS=$((TOTAL_PASS + 1))
+else
+    TOTAL_FAIL=$((TOTAL_FAIL + 1))
+fi
+
 # --- Summary ---
 echo ""
 echo "============================================"

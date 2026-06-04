@@ -37,3 +37,6 @@ Thumbs.db
 /core
 core.*
 vgcore.*
+
+# Runtime SQLite databases (built from JSON corpora at runtime)
+data/*.db

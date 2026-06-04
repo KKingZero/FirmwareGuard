@@ -14,11 +14,12 @@ features move into or out of the default CLI.
 | ARM-safe sidecar binary | Builds/tests | `make -f Makefile.arm test CC=/usr/bin/gcc` |
 | Kernel module | Builds on tested Fedora kernel | `make CC=/usr/bin/gcc` from `kernel/` |
 | HECI standalone test program | Builds standalone | `make CC=/usr/bin/gcc` from `src/monitor/` |
+| Phase-4 module commands | Wired + functional | `./firmwareguard cve-check "Intel Management Engine (ME)" 6.0.0` |
 
 ## Default CLI Surface
 
-These commands are currently wired through `src/main.c` and built into
-`./firmwareguard`:
+These commands are dispatched through the command table in `src/cli/` (see
+`cli_table.c`) and built into `./firmwareguard`:
 
 - `scan`
 - `block`
@@ -36,25 +37,39 @@ These commands are currently wired through `src/main.c` and built into
 - `trusted-boot-full`
 - `baseline-capture`
 - `baseline-compare`
+- `baseline-drift`
 - `implant-scan`
+- `acpi-scan`
+- `nic-scan`
+- `intel-me`
+- `amd-psp`
 - `compliance`
+- `cve-check` — CVE correlation database (`src/database/cve_db.c`)
+- `threat-scan` — threat-intel IOC database (`src/database/threat_intel.c`)
+- `rootkit-scan` — firmware rootkit scanner (`src/rootkit/rootkit_detect.c`)
+- `integrity-verify` — supply-chain checksum DB (`src/integrity/checksum_db.c`)
+- `heci-monitor` — Intel ME/HECI monitor (`src/monitor/heci_monitor.c`)
+- `spi-status` — SPI flash protection monitor (`src/monitor/spi_monitor.c`)
 
-## Source Present But Not Default-CLI Wired
+The database commands seed an empty SQLite store on first run from the bundled
+JSON corpora in `data/` (`cve_firmware.json`, `threat_intel.json`,
+`known_firmware.json`). The `.db` files are runtime artifacts (gitignored).
+The HECI and SPI monitors degrade gracefully when `/dev/mei0` / `/dev/fwguard`
+are absent.
 
-These modules exist in source form but are not exposed as default CLI commands
-yet. Some may compile as support objects while their command wiring remains
-deferred:
+## Source Present But Not Default-CLI Wired (Deferred)
 
-- Ghidra wrapper
-- checksum database
-- CVE database
-- threat intelligence database
-- firmware rootkit scanner
-- live dump module
-- HECI monitor CLI integration
-- SPI userspace monitor CLI integration
-- UEFI runtime integrity CLI integration
-- coreboot migration CLI integration
+These modules remain in-tree but are intentionally not linked into the default
+binary, each with a concrete blocker:
+
+- Ghidra wrapper — requires an external Ghidra install + Python scripts; large
+  attack surface, unusable in headless/restricted environments.
+- live dump module — SMRAM/ME dump paths are stubbed (`DUMP_STATUS_NOT_SUPPORTED`)
+  and depend on a kernel-module IOCTL that is not yet implemented.
+- coreboot migration — functional but depends on a manually-maintained board
+  compatibility database; niche, better as a standalone tool.
+- UEFI runtime integrity CLI integration — module compiles; command wiring
+  deferred.
 
 ## Planned Or Deferred
 

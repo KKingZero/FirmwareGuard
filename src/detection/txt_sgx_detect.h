@@ -5,8 +5,12 @@
 #include "msr.h"
 
 /* TXT-related MSR addresses */
+#ifndef MSR_IA32_FEATURE_CONTROL
 #define MSR_IA32_FEATURE_CONTROL    0x0000003A
+#endif
+#ifndef MSR_IA32_SMM_MONITOR_CTL
 #define MSR_IA32_SMM_MONITOR_CTL    0x0000009B
+#endif
 
 /* Feature Control bits */
 #define FC_LOCK_BIT                 (1ULL << 0)

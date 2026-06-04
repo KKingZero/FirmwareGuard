@@ -6,7 +6,9 @@
 
 /* Boot Guard MSR addresses */
 #define MSR_BOOT_GUARD_SACM_INFO    0x0000013A  /* SACM INFO MSR */
+#ifndef MSR_IA32_FEATURE_CONTROL
 #define MSR_IA32_FEATURE_CONTROL    0x0000003A
+#endif
 
 /* Boot Guard SACM INFO bit definitions */
 #define BG_SACM_INFO_NEM_ENABLED        (1ULL << 0)

@@ -11,9 +11,13 @@
 #define MSR_IA32_SMRR_PHYSBASE      0x000001F2  /* Intel SMRR Base */
 #define MSR_IA32_SMRR_PHYSMASK      0x000001F3  /* Intel SMRR Mask */
 #define MSR_SMI_COUNT               0x00000034  /* SMI Counter */
+#ifndef MSR_IA32_FEATURE_CONTROL
 #define MSR_IA32_FEATURE_CONTROL    0x0000003A  /* Feature Control */
+#endif
 #define MSR_IA32_VMX_BASIC          0x00000480  /* VMX Basic Info */
+#ifndef MSR_IA32_SMM_MONITOR_CTL
 #define MSR_IA32_SMM_MONITOR_CTL    0x0000009B  /* SMM Monitor Control */
+#endif
 
 /* SMM Feature Control bits */
 #define FEATURE_CONTROL_LOCK        (1 << 0)

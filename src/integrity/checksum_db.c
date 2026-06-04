@@ -5,7 +5,7 @@
  */
 
 #include "checksum_db.h"
-#include "../cJSON.h"
+#include "cJSON.h"
 #include "../../include/firmwareguard.h"
 
 #include <stdio.h>

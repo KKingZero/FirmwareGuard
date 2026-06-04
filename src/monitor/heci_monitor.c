@@ -126,7 +126,7 @@ int heci_init(void) {
 
     ret = ioctl(g_monitor.mei_fd, IOCTL_MEI_CONNECT_CLIENT, &connect_data);
     if (ret < 0) {
-        FG_DEBUG("MKHI client connect failed: %s (ME may not support MKHI)", strerror(errno));
+        FG_DEBUG("MKHI client connection failed: %s (ME may not support MKHI)", strerror(errno));
         /* Don't fail completely - we can still monitor even without MKHI connection */
     } else {
         FG_DEBUG("Connected to MKHI client (max_msg_len=%u)",

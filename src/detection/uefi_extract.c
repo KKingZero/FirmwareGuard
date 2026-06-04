@@ -1,4 +1,5 @@
 #include "uefi_extract.h"
+#include "fg_hash.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,7 +11,6 @@
 
 /* Forward declarations */
 static void add_finding(uefi_analysis_result_t *result, const char *finding);
-static void compute_simple_hash(const uint8_t *data, size_t len, uint8_t *hash, char *hex_out);
 static bool is_boot_variable(const char *name);
 static bool is_secure_boot_variable(const char *name);
 static bool is_driver_variable(const char *name);
@@ -34,33 +34,7 @@ void uefi_extract_cleanup(void) {
     FG_INFO("UEFI extraction subsystem cleaned up");
 }
 
-/* Simple FNV-1a based hash (not cryptographic, just for fingerprinting) */
-static void compute_simple_hash(const uint8_t *data, size_t len, uint8_t *hash, char *hex_out) {
-    /* FNV-1a 256-bit hash approximation using multiple 64-bit hashes */
-    uint64_t h[4] = {0xcbf29ce484222325ULL, 0xcbf29ce484222325ULL,
-                     0xcbf29ce484222325ULL, 0xcbf29ce484222325ULL};
-    const uint64_t prime = 0x100000001b3ULL;
-
-    for (size_t i = 0; i < len; i++) {
-        int idx = i % 4;
-        h[idx] ^= data[i];
-        h[idx] *= prime;
-    }
-
-    /* Store as 32 bytes */
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 8; j++) {
-            hash[i * 8 + j] = (h[i] >> (j * 8)) & 0xFF;
-        }
-    }
-
-    if (hex_out) {
-        for (int i = 0; i < 32; i++) {
-            sprintf(hex_out + (i * 2), "%02x", hash[i]);
-        }
-        hex_out[64] = '\0';
-    }
-}
+/* compute_simple_hash() now lives in fg_hash.c (shared, testable) */
 
 static bool is_boot_variable(const char *name) {
     return (strncmp(name, "Boot", 4) == 0 ||
