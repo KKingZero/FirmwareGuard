@@ -1,18 +1,401 @@
 #include "safety.h"
+#include "../grub/grub_config.h"
+#include "../uefi/uefi_vars.h"
 #include <sys/stat.h>
 #include <sys/file.h>
+#include <sys/wait.h>
 #include <dirent.h>
 #include <limits.h>
 #include <ctype.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <stdlib.h>
 #include <openssl/evp.h>
 
 /* Default backup directory */
 #define BACKUP_DIR "/var/lib/firmwareguard/backups"
 #define REGISTRY_FILE "/var/lib/firmwareguard/backup_registry.dat"
+#define ROLLBACK_FILE "/var/lib/firmwareguard/rollback_point.dat"
 #define LOG_FILE "/var/log/firmwareguard.log"
 
 /* Secure input buffer size */
 #define SAFE_INPUT_SIZE 256
+
+static int safety_secure_execute(const char *program, char *const argv[]) {
+    char *clean_env[] = { "PATH=/usr/sbin:/usr/bin:/sbin:/bin", NULL };
+    pid_t pid;
+    int status;
+
+    pid = fork();
+    if (pid < 0) {
+        FG_LOG_ERROR("fork() failed: %s", strerror(errno));
+        return FG_ERROR;
+    }
+
+    if (pid == 0) {
+        execve(program, argv, clean_env);
+        _exit(127);
+    }
+
+    if (waitpid(pid, &status, 0) < 0) {
+        FG_LOG_ERROR("waitpid() failed: %s", strerror(errno));
+        return FG_ERROR;
+    }
+
+    if (WIFEXITED(status)) {
+        return WEXITSTATUS(status) == 0 ? FG_SUCCESS : FG_ERROR;
+    }
+
+    return FG_ERROR;
+}
+
+static bool safety_valid_iface(const char *iface) {
+    size_t len;
+
+    if (!iface || !*iface) {
+        return false;
+    }
+
+    len = strlen(iface);
+    if (len > 15) {
+        return false;
+    }
+
+    for (size_t i = 0; i < len; i++) {
+        char c = iface[i];
+        if (!isalnum((unsigned char)c) && c != '-' && c != '_' &&
+            c != ':' && c != '.') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static int safety_atomic_write_file(const char *path, const void *data,
+                                    size_t size, mode_t mode) {
+    char temp_file[512];
+    int fd;
+    ssize_t written;
+
+    if (!path || !data || size == 0) {
+        return FG_ERROR;
+    }
+
+    int ret = snprintf(temp_file, sizeof(temp_file), "%s.fwguard-XXXXXX", path);
+    if (ret < 0 || ret >= (int)sizeof(temp_file)) {
+        FG_LOG_ERROR("Restore path too long: %s", path);
+        return FG_ERROR;
+    }
+
+    fd = mkstemp(temp_file);
+    if (fd < 0) {
+        FG_LOG_ERROR("Failed to create restore temp file: %s", strerror(errno));
+        return FG_ERROR;
+    }
+
+    if (fchmod(fd, mode) != 0) {
+        FG_WARN("Failed to set restored file permissions: %s", strerror(errno));
+    }
+
+    written = write(fd, data, size);
+    if (written != (ssize_t)size) {
+        FG_LOG_ERROR("Failed to write restore data: %s", strerror(errno));
+        close(fd);
+        unlink(temp_file);
+        return FG_ERROR;
+    }
+
+    if (fsync(fd) != 0) {
+        FG_WARN("Failed to fsync restore temp file: %s", strerror(errno));
+    }
+
+    close(fd);
+
+    if (rename(temp_file, path) != 0) {
+        FG_LOG_ERROR("Failed to replace restored file %s: %s",
+                     path, strerror(errno));
+        unlink(temp_file);
+        return FG_ERROR;
+    }
+
+    return FG_SUCCESS;
+}
+
+static const char *safety_grub_restore_path(void) {
+#ifdef FG_TESTING
+    const char *test_path = getenv("FG_TEST_GRUB_FILE");
+#endif
+    grub_config_t grub;
+
+#ifdef FG_TESTING
+    if (test_path && *test_path) {
+        return test_path;
+    }
+#endif
+
+    if (grub_init(&grub) == FG_SUCCESS) {
+        static char path[256];
+        snprintf(path, sizeof(path), "%s", grub.grub_file);
+        grub_cleanup(&grub);
+        return path;
+    }
+
+    return GRUB_DEFAULT_FILE;
+}
+
+static int safety_restore_grub_bytes(safety_context_t *ctx,
+                                     const void *data, size_t size) {
+    const char *path = safety_grub_restore_path();
+
+    if (safety_atomic_write_file(path, data, size, 0600) != FG_SUCCESS) {
+        return FG_ERROR;
+    }
+
+    FG_INFO("Restored GRUB configuration: %s", path);
+
+#ifdef FG_TESTING
+    if (getenv("FG_TEST_SKIP_GRUB_UPDATE")) {
+        return FG_SUCCESS;
+    }
+#endif
+
+    return grub_update(ctx);
+}
+
+static int safety_parse_field(const char *text, const char *key,
+                              char *out, size_t out_size) {
+    size_t key_len;
+    const char *p;
+    const char *end;
+    size_t len;
+
+    if (!text || !key || !out || out_size == 0) {
+        return FG_ERROR;
+    }
+
+    key_len = strlen(key);
+    p = text;
+    while (*p) {
+        if (strncmp(p, key, key_len) == 0 && p[key_len] == '=') {
+            p += key_len + 1;
+            end = strpbrk(p, "\r\n");
+            len = end ? (size_t)(end - p) : strlen(p);
+            if (len >= out_size) {
+                return FG_ERROR;
+            }
+            memcpy(out, p, len);
+            out[len] = '\0';
+            return FG_SUCCESS;
+        }
+        p = strchr(p, '\n');
+        if (!p) {
+            break;
+        }
+        p++;
+    }
+
+    return FG_NOT_FOUND;
+}
+
+static int safety_restore_nic_config(const char *text) {
+    char iface[32];
+    char wol[32];
+    char unit[96];
+
+    if (safety_parse_field(text, "iface", iface, sizeof(iface)) != FG_SUCCESS ||
+        safety_parse_field(text, "wol", wol, sizeof(wol)) != FG_SUCCESS) {
+        FG_LOG_ERROR("Invalid NIC backup payload");
+        return FG_ERROR;
+    }
+
+    if (!safety_valid_iface(iface)) {
+        FG_LOG_ERROR("Invalid interface in NIC backup: %s", iface);
+        return FG_ERROR;
+    }
+
+    if (strcmp(wol, "enabled") == 0) {
+        strcpy(wol, "g");
+    } else if (strcmp(wol, "disabled") == 0) {
+        strcpy(wol, "d");
+    } else {
+        size_t wol_len = strlen(wol);
+        if (wol_len == 0 || wol_len > 16) {
+            FG_LOG_ERROR("Invalid WoL mode in NIC backup: %s", wol);
+            return FG_ERROR;
+        }
+        for (size_t i = 0; i < wol_len; i++) {
+            if (!strchr("dpgumbas", wol[i])) {
+                FG_LOG_ERROR("Invalid WoL mode in NIC backup: %s", wol);
+                return FG_ERROR;
+            }
+        }
+    }
+
+    char *ethargv[] = { "/usr/sbin/ethtool", "-s", iface, "wol", wol, NULL };
+    int ret = safety_secure_execute("/usr/sbin/ethtool", ethargv);
+
+    snprintf(unit, sizeof(unit), "fwguard-wol@%s.service", iface);
+    char *dis[] = { "/usr/bin/systemctl", "disable", "--now", unit, NULL };
+    safety_secure_execute("/usr/bin/systemctl", dis);
+    unlink("/etc/systemd/system/fwguard-wol@.service");
+    char *reload[] = { "/usr/bin/systemctl", "daemon-reload", NULL };
+    safety_secure_execute("/usr/bin/systemctl", reload);
+
+    return ret;
+}
+
+static int safety_restore_system_state(const char *text) {
+    char service[128];
+    char masked[8] = "0";
+    char enabled[8] = "0";
+    char active[8] = "0";
+
+    if (safety_parse_field(text, "service", service, sizeof(service)) != FG_SUCCESS) {
+        FG_LOG_ERROR("Invalid system-state backup payload");
+        return FG_ERROR;
+    }
+
+    if (strchr(service, '/') || strstr(service, "..") ||
+        !strstr(service, ".service")) {
+        FG_LOG_ERROR("Invalid service in backup: %s", service);
+        return FG_ERROR;
+    }
+
+    safety_parse_field(text, "masked", masked, sizeof(masked));
+    safety_parse_field(text, "enabled", enabled, sizeof(enabled));
+    safety_parse_field(text, "active", active, sizeof(active));
+
+    if (strcmp(masked, "1") == 0) {
+        char *mask[] = { "/usr/bin/systemctl", "mask", service, NULL };
+        safety_secure_execute("/usr/bin/systemctl", mask);
+    } else {
+        char *unmask[] = { "/usr/bin/systemctl", "unmask", service, NULL };
+        safety_secure_execute("/usr/bin/systemctl", unmask);
+    }
+
+    if (strcmp(enabled, "1") == 0) {
+        char *enable[] = { "/usr/bin/systemctl", "enable", service, NULL };
+        safety_secure_execute("/usr/bin/systemctl", enable);
+    } else {
+        char *disable[] = { "/usr/bin/systemctl", "disable", service, NULL };
+        safety_secure_execute("/usr/bin/systemctl", disable);
+    }
+
+    if (strcmp(active, "1") == 0) {
+        char *start[] = { "/usr/bin/systemctl", "start", service, NULL };
+        safety_secure_execute("/usr/bin/systemctl", start);
+    } else {
+        char *stop[] = { "/usr/bin/systemctl", "stop", service, NULL };
+        safety_secure_execute("/usr/bin/systemctl", stop);
+    }
+
+    return FG_SUCCESS;
+}
+
+static int safety_restore_uefi_payload(safety_context_t *ctx,
+                                       const char *text, size_t size) {
+    char name[256];
+    char guid[64];
+    char attr_text[32];
+    char data_size_text[32];
+    uint32_t attrs;
+    size_t data_size;
+    const char *data_marker;
+    const uint8_t *var_data;
+
+    if (safety_parse_field(text, "name", name, sizeof(name)) != FG_SUCCESS ||
+        safety_parse_field(text, "guid", guid, sizeof(guid)) != FG_SUCCESS ||
+        safety_parse_field(text, "attributes", attr_text, sizeof(attr_text)) != FG_SUCCESS ||
+        safety_parse_field(text, "data_size", data_size_text, sizeof(data_size_text)) != FG_SUCCESS) {
+        FG_LOG_ERROR("Invalid UEFI backup metadata");
+        return FG_ERROR;
+    }
+
+    attrs = (uint32_t)strtoul(attr_text, NULL, 0);
+    data_size = (size_t)strtoull(data_size_text, NULL, 10);
+    data_marker = strstr(text, "\n--DATA--\n");
+    if (!data_marker) {
+        FG_LOG_ERROR("Invalid UEFI backup payload");
+        return FG_ERROR;
+    }
+
+    data_marker += strlen("\n--DATA--\n");
+    if ((size_t)(data_marker - text) + data_size > size) {
+        FG_LOG_ERROR("UEFI backup payload is truncated");
+        return FG_ERROR;
+    }
+
+    var_data = (const uint8_t *)data_marker;
+    return uefi_write_variable(ctx, name, guid, attrs, var_data, data_size);
+}
+
+static int safety_save_rollback_point(const safety_context_t *ctx) {
+    FILE *fp;
+
+    if (!ctx || ctx->dry_run || ctx->rollback_point.timestamp == 0) {
+        return FG_SUCCESS;
+    }
+
+    fp = fopen(ROLLBACK_FILE, "wb");
+    if (!fp) {
+        FG_WARN("Failed to save rollback point: %s", strerror(errno));
+        return FG_ERROR;
+    }
+
+    if (flock(fileno(fp), LOCK_EX) != 0) {
+        fclose(fp);
+        return FG_ERROR;
+    }
+
+    fchmod(fileno(fp), 0600);
+    if (fwrite(&ctx->rollback_point, sizeof(rollback_point_t), 1, fp) != 1) {
+        flock(fileno(fp), LOCK_UN);
+        fclose(fp);
+        return FG_ERROR;
+    }
+
+    flock(fileno(fp), LOCK_UN);
+    fclose(fp);
+    return FG_SUCCESS;
+}
+
+static int safety_load_rollback_point(safety_context_t *ctx) {
+    FILE *fp;
+
+    if (!ctx) {
+        return FG_ERROR;
+    }
+
+    fp = fopen(ROLLBACK_FILE, "rb");
+    if (!fp) {
+        return FG_SUCCESS;
+    }
+
+    if (flock(fileno(fp), LOCK_SH) != 0) {
+        fclose(fp);
+        return FG_ERROR;
+    }
+
+    if (fread(&ctx->rollback_point, sizeof(rollback_point_t), 1, fp) != 1) {
+        memset(&ctx->rollback_point, 0, sizeof(ctx->rollback_point));
+        flock(fileno(fp), LOCK_UN);
+        fclose(fp);
+        return FG_ERROR;
+    }
+
+    flock(fileno(fp), LOCK_UN);
+    fclose(fp);
+
+    if (ctx->rollback_point.num_backups < 0 ||
+        ctx->rollback_point.num_backups > MAX_BACKUPS) {
+        memset(&ctx->rollback_point, 0, sizeof(ctx->rollback_point));
+        return FG_ERROR;
+    }
+
+    ctx->rollback_point.description[sizeof(ctx->rollback_point.description) - 1] = '\0';
+    return FG_SUCCESS;
+}
 
 int safety_init(safety_context_t *ctx, safety_mode_t mode) {
     if (!ctx) {
@@ -36,6 +419,7 @@ int safety_init(safety_context_t *ctx, safety_mode_t mode) {
 
         /* Try to load existing registry */
         safety_load_registry(ctx);
+        safety_load_rollback_point(ctx);
     }
 
     FG_INFO("Safety subsystem initialized (mode: %s)",
@@ -52,6 +436,7 @@ void safety_cleanup(safety_context_t *ctx) {
 
     /* Save registry if not in dry-run mode */
     if (!ctx->dry_run) {
+        safety_save_rollback_point(ctx);
         safety_save_registry(ctx);
     }
 
@@ -169,7 +554,6 @@ int safety_create_backup(safety_context_t *ctx, backup_type_t type,
     FILE *fp;
     char timestamp_str[32];
     struct tm *tm_info;
-    time_t now;
 
     if (!ctx || !name || !data || size == 0) {
         FG_LOG_ERROR("Invalid parameters for backup creation");
@@ -303,7 +687,7 @@ int safety_restore_backup(safety_context_t *ctx, const backup_entry_t *backup) {
     }
 
     /* Allocate buffer */
-    data = malloc(size);
+    data = calloc(1, size + 1);
     if (!data) {
         FG_LOG_ERROR("Failed to allocate memory for backup restore");
         return FG_ERROR;
@@ -343,21 +727,19 @@ int safety_restore_backup(safety_context_t *ctx, const backup_entry_t *backup) {
     /* Restore based on backup type */
     switch (backup->type) {
         case BACKUP_TYPE_UEFI_VAR:
-            /* Restoration handled by UEFI module */
-            FG_INFO("UEFI variable restore requires UEFI module");
-            ret = FG_SUCCESS;
+            ret = safety_restore_uefi_payload(ctx, (const char *)data, size);
             break;
 
         case BACKUP_TYPE_GRUB_CONFIG:
-            /* Restore GRUB config */
-            FG_INFO("GRUB config restore requires GRUB module");
-            ret = FG_SUCCESS;
+            ret = safety_restore_grub_bytes(ctx, data, size);
             break;
 
         case BACKUP_TYPE_NIC_CONFIG:
-            /* Restore NIC configuration */
-            FG_INFO("NIC config restore requires NIC module");
-            ret = FG_SUCCESS;
+            ret = safety_restore_nic_config((const char *)data);
+            break;
+
+        case BACKUP_TYPE_SYSTEM_STATE:
+            ret = safety_restore_system_state((const char *)data);
             break;
 
         default:
@@ -389,6 +771,7 @@ int safety_create_rollback_point(safety_context_t *ctx, const char *description)
 
     FG_INFO("Created rollback point: %s", description);
     safety_log_operation(ctx, "rollback_point_created", true, description);
+    safety_save_rollback_point(ctx);
 
     return FG_SUCCESS;
 }
@@ -418,8 +801,8 @@ int safety_rollback(safety_context_t *ctx) {
         return FG_ERROR;
     }
 
-    /* Restore all backups from rollback point */
-    for (int i = 0; i < ctx->rollback_point.num_backups; i++) {
+    /* Restore newest first so earlier pre-change backups win last. */
+    for (int i = ctx->rollback_point.num_backups - 1; i >= 0; i--) {
         if (safety_restore_backup(ctx, &ctx->rollback_point.backups[i]) != FG_SUCCESS) {
             FG_WARN("Failed to restore backup during rollback: %s",
                    ctx->rollback_point.backups[i].name);

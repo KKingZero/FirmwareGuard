@@ -22,6 +22,9 @@ typedef struct {
     bool psp_kernel_param;
     bool psp_disable_ftpm;
 
+    /* Kernel command-line hardening */
+    bool block_iommu;
+
     /* NIC settings */
     bool block_nic_wol;
     bool block_intel_amt;

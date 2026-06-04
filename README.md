@@ -84,6 +84,25 @@ FirmwareGuard fills this gap.
 - **User Confirmation**: Requires explicit user approval for critical, potentially destructive operations.
 - **Failsafe Rollback**: Integrates with the bootloader to revert changes in case of boot failure.
 
+### Tier-1 Reversible Hardening
+
+FirmwareGuard is still audit-first. Mutating hardening is opt-in and dry-run by
+default:
+
+```bash
+sudo ./firmwareguard harden              # plan only, no changes
+sudo ./firmwareguard harden --apply      # apply with confirmations
+sudo ./firmwareguard harden --apply --yes
+sudo ./firmwareguard rollback            # restore latest rollback point
+sudo ./firmwareguard rollback --list-backups
+```
+
+Tier-1 actions are OS-level and reversible: IOMMU kernel command-line hardening,
+Wake-on-LAN disable with a persistent systemd unit, and OS-side Intel AMT/LMS
+service masking. Backups live under `/var/lib/firmwareguard/backups`; rollback
+points are checksum-verified before restore. Firmware flashing, `flashrom -w`,
+MSR writes, and ME-cleaner style firmware modification are not part of Tier 1.
+
 ### ✅ Extensible Architecture
 - **Kernel Module (Optional)**: Provides a mechanism for kernel-level MMIO region tracking and DMA restriction.
 - **Configuration System**: Manages settings and state via a clear configuration file (`/etc/firmwareguard/config.conf`).

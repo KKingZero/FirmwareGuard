@@ -12,8 +12,11 @@ typedef enum {
     BLOCK_METHOD_UEFI_VAR,
     BLOCK_METHOD_KERNEL_PARAM,
     BLOCK_METHOD_GRUB_CONFIG,
+    BLOCK_METHOD_NIC_RUNTIME,
     BLOCK_METHOD_NIC_PERSISTENT,
+    BLOCK_METHOD_SYSTEMD,
     BLOCK_METHOD_ME_CLEANER,
+    BLOCK_METHOD_SERVICE_MASK,   /* systemd unit mask (e.g. Intel LMS for AMT) */
     BLOCK_METHOD_MAX
 } block_method_t;
 
@@ -26,6 +29,7 @@ typedef struct {
     bool requires_reboot;
     bool reversible;
     char description[256];
+    char warning[256];          /* surfaced in dry-run preview and before apply */
     char error_message[512];
 } block_operation_t;
 
@@ -59,6 +63,9 @@ int blocker_v2_mitigate_psp_kernel(blocker_v2_context_t *ctx);
 
 /* AMD PSP mitigation via GRUB configuration */
 int blocker_v2_mitigate_psp_grub(blocker_v2_context_t *ctx);
+
+/* Enable IOMMU / DMA protection via kernel cmdline (anti-DMA-attack) */
+int blocker_v2_enable_iommu(blocker_v2_context_t *ctx);
 
 /* NIC persistent Wake-on-LAN disable */
 int blocker_v2_disable_wol_persistent(blocker_v2_context_t *ctx,

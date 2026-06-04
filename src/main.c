@@ -19,16 +19,47 @@ int main(int argc, char **argv) {
     bool verbose = false;
     bool brief = false;
     bool history = false;
+    bool apply = false;
+    bool yes = false;
+    bool dangerous = false;
+    bool rollback = false;
+    bool list_backups = false;
+    bool iommu = false;
+    bool wol = false;
+    bool no_wol = false;
+    bool amt = false;
     const char *output_file = NULL;
     const char *command = NULL;
 
-    enum { OPT_HTML = 1000, OPT_SARIF, OPT_HISTORY };
+    enum {
+        OPT_HTML = 1000,
+        OPT_SARIF,
+        OPT_HISTORY,
+        OPT_APPLY,
+        OPT_YES,
+        OPT_DANGEROUS,
+        OPT_ROLLBACK,
+        OPT_LIST_BACKUPS,
+        OPT_IOMMU,
+        OPT_WOL,
+        OPT_NO_WOL,
+        OPT_AMT
+    };
 
     static struct option long_options[] = {
         {"json",    no_argument,       0, 'j'},
         {"html",    no_argument,       0, OPT_HTML},
         {"sarif",   no_argument,       0, OPT_SARIF},
         {"history", no_argument,       0, OPT_HISTORY},
+        {"apply",   no_argument,       0, OPT_APPLY},
+        {"yes",     no_argument,       0, OPT_YES},
+        {"dangerous", no_argument,     0, OPT_DANGEROUS},
+        {"rollback", no_argument,      0, OPT_ROLLBACK},
+        {"list-backups", no_argument,  0, OPT_LIST_BACKUPS},
+        {"iommu",   no_argument,       0, OPT_IOMMU},
+        {"wol",     no_argument,       0, OPT_WOL},
+        {"no-wol",  no_argument,       0, OPT_NO_WOL},
+        {"amt",     no_argument,       0, OPT_AMT},
         {"output",  required_argument, 0, 'o'},
         {"verbose", no_argument,       0, 'v'},
         {"brief",   no_argument,       0, 'b'},
@@ -65,6 +96,33 @@ int main(int argc, char **argv) {
             case OPT_HISTORY:
                 history = true;
                 break;
+            case OPT_APPLY:
+                apply = true;
+                break;
+            case OPT_YES:
+                yes = true;
+                break;
+            case OPT_DANGEROUS:
+                dangerous = true;
+                break;
+            case OPT_ROLLBACK:
+                rollback = true;
+                break;
+            case OPT_LIST_BACKUPS:
+                list_backups = true;
+                break;
+            case OPT_IOMMU:
+                iommu = true;
+                break;
+            case OPT_WOL:
+                wol = true;
+                break;
+            case OPT_NO_WOL:
+                no_wol = true;
+                break;
+            case OPT_AMT:
+                amt = true;
+                break;
             case 'v':
                 verbose = true;
                 break;
@@ -95,6 +153,15 @@ int main(int argc, char **argv) {
         .verbose = verbose,
         .brief = brief,
         .history = history,
+        .apply = apply,
+        .yes = yes,
+        .dangerous = dangerous,
+        .rollback = rollback,
+        .list_backups = list_backups,
+        .iommu = iommu,
+        .wol = wol,
+        .no_wol = no_wol,
+        .amt = amt,
         .output_file = output_file,
         .report_fmt = report_fmt,
     };

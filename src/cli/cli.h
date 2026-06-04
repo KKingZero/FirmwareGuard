@@ -23,6 +23,15 @@ typedef struct {
     bool verbose;          /* -v/--verbose */
     bool brief;            /* -b/--brief */
     bool history;          /* --history */
+    bool apply;            /* --apply */
+    bool yes;              /* --yes */
+    bool dangerous;        /* --dangerous */
+    bool rollback;         /* --rollback */
+    bool list_backups;     /* --list-backups */
+    bool iommu;            /* --iommu */
+    bool wol;              /* --wol */
+    bool no_wol;           /* --no-wol */
+    bool amt;              /* --amt */
     const char *output_file; /* -o/--output (also baseline file / history dir) */
     report_format_t report_fmt; /* resolved scan/block report format */
 } cli_opts_t;
@@ -53,6 +62,8 @@ void cli_print_usage(const char *prog_name);
 int cmd_scan(int argc, char **argv, const cli_opts_t *o);
 int cmd_block(int argc, char **argv, const cli_opts_t *o);
 int cmd_panic(int argc, char **argv, const cli_opts_t *o);
+int cmd_harden(int argc, char **argv, const cli_opts_t *o);
+int cmd_rollback(int argc, char **argv, const cli_opts_t *o);
 
 /* ---- Handlers: firmware group (cli_firmware.c) ---- */
 int cmd_smm_scan(int argc, char **argv, const cli_opts_t *o);

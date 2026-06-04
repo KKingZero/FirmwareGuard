@@ -464,13 +464,34 @@ int grub_update(safety_context_t *safety_ctx) {
 }
 
 int grub_restore_config(safety_context_t *safety_ctx) {
-    /* This would restore from backup registry */
+    const backup_registry_t *registry;
+    const backup_entry_t *best = NULL;
+
     if (!safety_ctx) {
         return FG_ERROR;
     }
 
-    FG_INFO("GRUB config restore requires backup module integration");
-    return FG_NOT_SUPPORTED; /* Placeholder */
+    registry = safety_get_registry(safety_ctx);
+    if (!registry) {
+        return FG_ERROR;
+    }
+
+    for (int i = 0; i < registry->num_backups; i++) {
+        const backup_entry_t *entry = &registry->backups[i];
+        if (!entry->valid || entry->type != BACKUP_TYPE_GRUB_CONFIG) {
+            continue;
+        }
+        if (!best || entry->timestamp > best->timestamp) {
+            best = entry;
+        }
+    }
+
+    if (!best) {
+        FG_LOG_ERROR("No GRUB backup available for restore");
+        return FG_NOT_FOUND;
+    }
+
+    return safety_restore_backup(safety_ctx, best);
 }
 
 bool grub_verify_config(const grub_config_t *config) {

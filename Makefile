@@ -53,7 +53,8 @@ CORE_SRCS = $(CORE_DIR)/msr.c \
             $(CORE_DIR)/nic.c \
             $(CORE_DIR)/probe.c
 
-BLOCK_SRCS = $(BLOCK_DIR)/blocker.c
+BLOCK_SRCS = $(BLOCK_DIR)/blocker.c \
+             $(BLOCK_DIR)/blocker_v2.c
 
 AUDIT_SRCS = $(AUDIT_DIR)/reporter.c \
              $(AUDIT_DIR)/sarif.c
@@ -115,7 +116,8 @@ CLI_SRCS = $(CLI_DIR)/cli_table.c \
            $(CLI_DIR)/cli_trustedboot.c \
            $(CLI_DIR)/cli_baseline.c \
            $(CLI_DIR)/cli_detect.c \
-           $(CLI_DIR)/cli_modules.c
+           $(CLI_DIR)/cli_modules.c \
+           $(CLI_DIR)/cli_harden.c
 
 # cJSON library
 CJSON_SRC = $(SRC_DIR)/cJSON.c

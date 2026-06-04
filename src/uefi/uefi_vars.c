@@ -326,6 +326,7 @@ int uefi_backup_variable(safety_context_t *safety_ctx,
     char backup_name[512];
     uint8_t *backup_data;
     size_t backup_size;
+    int header_size;
     int ret;
 
     if (!safety_ctx || !var || !var->exists) {
@@ -335,17 +336,33 @@ int uefi_backup_variable(safety_context_t *safety_ctx,
     /* Create backup name */
     snprintf(backup_name, sizeof(backup_name), "uefi_%s_%s", var->name, var->guid);
 
-    /* Allocate backup data (attributes + data) */
-    backup_size = sizeof(uint32_t) + var->data_size;
+    header_size = snprintf(NULL, 0,
+                           "name=%s\n"
+                           "guid=%s\n"
+                           "attributes=0x%x\n"
+                           "data_size=%zu\n"
+                           "--DATA--\n",
+                           var->name, var->guid, var->attributes,
+                           var->data_size);
+    if (header_size < 0) {
+        return FG_ERROR;
+    }
+
+    backup_size = (size_t)header_size + var->data_size + 1;
     backup_data = (uint8_t *)malloc(backup_size);
     if (!backup_data) {
         return FG_ERROR;
     }
 
-    /* Copy attributes and data */
-    memcpy(backup_data, &var->attributes, sizeof(uint32_t));
+    snprintf((char *)backup_data, (size_t)header_size + 1,
+             "name=%s\n"
+             "guid=%s\n"
+             "attributes=0x%x\n"
+             "data_size=%zu\n"
+             "--DATA--\n",
+             var->name, var->guid, var->attributes, var->data_size);
     if (var->data_size > 0 && var->data) {
-        memcpy(backup_data + sizeof(uint32_t), var->data, var->data_size);
+        memcpy(backup_data + header_size, var->data, var->data_size);
     }
 
     /* Create backup */
@@ -358,14 +375,37 @@ int uefi_backup_variable(safety_context_t *safety_ctx,
 
 int uefi_restore_variable(safety_context_t *safety_ctx,
                           const char *backup_name) {
-    /* This would be implemented by reading from backup registry
-     * and calling uefi_write_variable with the backed-up data */
+    const backup_registry_t *registry;
+    const backup_entry_t *best = NULL;
+
     if (!safety_ctx || !backup_name) {
         return FG_ERROR;
     }
 
-    FG_INFO("UEFI variable restore: %s (requires backup module integration)", backup_name);
-    return FG_NOT_SUPPORTED; /* Placeholder */
+    registry = safety_get_registry(safety_ctx);
+    if (!registry) {
+        return FG_ERROR;
+    }
+
+    for (int i = 0; i < registry->num_backups; i++) {
+        const backup_entry_t *entry = &registry->backups[i];
+        if (!entry->valid || entry->type != BACKUP_TYPE_UEFI_VAR) {
+            continue;
+        }
+        if (strcmp(entry->name, backup_name) != 0) {
+            continue;
+        }
+        if (!best || entry->timestamp > best->timestamp) {
+            best = entry;
+        }
+    }
+
+    if (!best) {
+        FG_LOG_ERROR("UEFI backup not found: %s", backup_name);
+        return FG_NOT_FOUND;
+    }
+
+    return safety_restore_backup(safety_ctx, best);
 }
 
 int uefi_list_variables(FILE *output) {

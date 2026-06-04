@@ -50,6 +50,7 @@ void config_get_defaults(fg_config_t *config) {
     config->block_amd_psp = false;
     config->psp_kernel_param = true;
     config->psp_disable_ftpm = false;
+    config->block_iommu = false;
 
     config->block_nic_wol = false;
     config->block_intel_amt = false;
@@ -135,6 +136,8 @@ int config_parse_option(fg_config_t *config, const char *key, const char *value)
         config->psp_kernel_param = parse_bool(value);
     } else if (strcmp(key, "psp_disable_ftpm") == 0) {
         config->psp_disable_ftpm = parse_bool(value);
+    } else if (strcmp(key, "block_iommu") == 0) {
+        config->block_iommu = parse_bool(value);
     }
     /* NIC options */
     else if (strcmp(key, "block_nic_wol") == 0) {
@@ -258,6 +261,9 @@ int config_save(const fg_config_t *config) {
     fprintf(fp, "block_amd_psp=%s\n", config->block_amd_psp ? "true" : "false");
     fprintf(fp, "psp_kernel_param=%s\n", config->psp_kernel_param ? "true" : "false");
     fprintf(fp, "psp_disable_ftpm=%s\n\n", config->psp_disable_ftpm ? "true" : "false");
+
+    fprintf(fp, "[Kernel]\n");
+    fprintf(fp, "block_iommu=%s\n\n", config->block_iommu ? "true" : "false");
 
     fprintf(fp, "[Network Interfaces]\n");
     fprintf(fp, "block_nic_wol=%s\n", config->block_nic_wol ? "true" : "false");
@@ -414,6 +420,9 @@ int config_print(const fg_config_t *config, FILE *output) {
     fprintf(output, "  Block:          %s\n", config->block_amd_psp ? "Yes" : "No");
     fprintf(output, "  Kernel param:   %s\n", config->psp_kernel_param ? "Yes" : "No");
     fprintf(output, "  Disable fTPM:   %s\n\n", config->psp_disable_ftpm ? "Yes" : "No");
+
+    fprintf(output, "Kernel:\n");
+    fprintf(output, "  Block IOMMU:    %s\n\n", config->block_iommu ? "Yes" : "No");
 
     fprintf(output, "Network:\n");
     fprintf(output, "  Block WoL:      %s\n", config->block_nic_wol ? "Yes" : "No");

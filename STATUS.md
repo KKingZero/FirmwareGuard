@@ -11,6 +11,7 @@ features move into or out of the default CLI.
 | Main userspace CLI | Builds | `make CC=/usr/bin/gcc` |
 | Help UX | Works as standalone command | `./firmwareguard --help` |
 | Safety and UEFI safety tests | Pass | `CC=/usr/bin/gcc ./tools/run-tests.sh` |
+| Tier-1 hardening dry-run/rollback code | Wired | `./firmwareguard harden`, `./firmwareguard rollback --list-backups` |
 | ARM-safe sidecar binary | Builds/tests | `make -f Makefile.arm test CC=/usr/bin/gcc` |
 | Kernel module | Builds on tested Fedora kernel | `make CC=/usr/bin/gcc` from `kernel/` |
 | HECI standalone test program | Builds standalone | `make CC=/usr/bin/gcc` from `src/monitor/` |
@@ -23,6 +24,8 @@ These commands are dispatched through the command table in `src/cli/` (see
 
 - `scan`
 - `block`
+- `harden`
+- `rollback`
 - `report`
 - `panic`
 - `smm-scan`
@@ -70,6 +73,9 @@ binary, each with a concrete blocker:
   compatibility database; niche, better as a standalone tool.
 - UEFI runtime integrity CLI integration — module compiles; command wiring
   deferred.
+- Dangerous-tier remediation — ME HAP/UEFI variable modification remains gated
+  behind explicit dangerous selection and Secure-Boot checks; no firmware
+  flashing or ME-cleaner style writes are wired.
 
 ## Planned Or Deferred
 

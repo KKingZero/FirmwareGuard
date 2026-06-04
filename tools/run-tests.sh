@@ -59,7 +59,7 @@ echo ""
 echo "--- Compiling test-safety-hash ---"
 if $CC $CFLAGS \
     -o "$BUILD_DIR/test-safety-hash" \
-    tools/test-safety-hash.c src/safety/safety.c \
+    tools/test-safety-hash.c src/safety/safety.c src/grub/grub_config.c src/uefi/uefi_vars.c \
     $LDFLAGS 2>&1; then
     echo "  Compiled OK"
 else
@@ -80,7 +80,7 @@ echo ""
 echo "--- Compiling test-uefi-safety ---"
 if $CC $CFLAGS \
     -o "$BUILD_DIR/test-uefi-safety" \
-    tools/test-uefi-safety.c src/uefi/uefi_vars.c src/safety/safety.c \
+    tools/test-uefi-safety.c src/uefi/uefi_vars.c src/safety/safety.c src/grub/grub_config.c \
     $LDFLAGS 2>&1; then
     echo "  Compiled OK"
 else
@@ -156,6 +156,28 @@ fi
 echo ""
 echo "--- Running test-threat-intel (data/threat_intel.json) ---"
 if "$BUILD_DIR/test-threat-intel" data/threat_intel.json; then
+    TOTAL_PASS=$((TOTAL_PASS + 1))
+else
+    TOTAL_FAIL=$((TOTAL_FAIL + 1))
+fi
+
+# --- Test 6: Reversible remediation restore ---
+echo ""
+echo "--- Compiling test-remediate ---"
+if $CC $CFLAGS \
+    -DFG_TESTING \
+    -o "$BUILD_DIR/test-remediate" \
+    tools/test-remediate.c src/safety/safety.c src/grub/grub_config.c src/uefi/uefi_vars.c \
+    $LDFLAGS 2>&1; then
+    echo "  Compiled OK"
+else
+    echo "  COMPILATION FAILED"
+    exit 1
+fi
+
+echo ""
+echo "--- Running test-remediate ---"
+if "$BUILD_DIR/test-remediate"; then
     TOTAL_PASS=$((TOTAL_PASS + 1))
 else
     TOTAL_FAIL=$((TOTAL_FAIL + 1))

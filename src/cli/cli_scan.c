@@ -78,6 +78,10 @@ int cmd_scan(int argc, char **argv, const cli_opts_t *o) {
 }
 
 int cmd_block(int argc, char **argv, const cli_opts_t *o) {
+    if (o->apply) {
+        return cmd_harden(argc, argv, o);
+    }
+
     (void)argc; (void)argv;
     report_format_t fmt = o->report_fmt;
     bool sarif = o->sarif;

@@ -9,7 +9,9 @@
 
 const cli_command_t CLI_COMMANDS[] = {
     { "scan",              cmd_scan,              "Scan system for firmware telemetry components" },
-    { "block",             cmd_block,             "Attempt to block detected telemetry (non-destructive)" },
+    { "block",             cmd_block,             "Generate blocking recommendations; --apply runs Tier-1 hardening" },
+    { "harden",            cmd_harden,            "Plan or apply reversible Tier-1 hardening" },
+    { "rollback",          cmd_rollback,          "Restore the latest FirmwareGuard rollback point" },
     { "report",            cmd_scan,              "Generate audit report from previous scan" },
     { "panic",             cmd_panic,             "Show recommendations to disable all blockable components" },
     { "smm-scan",          cmd_smm_scan,          "Scan SMM security configuration" },
@@ -59,7 +61,9 @@ void cli_print_usage(const char *prog_name) {
     printf("\n");
     printf("Commands:\n");
     printf("  scan        Scan system for firmware telemetry components\n");
-    printf("  block       Attempt to block detected telemetry (non-destructive)\n");
+    printf("  block       Generate blocking recommendations; --apply runs Tier-1 hardening\n");
+    printf("  harden      Plan/apply reversible Tier-1 hardening\n");
+    printf("  rollback    Restore latest rollback point or --list-backups\n");
     printf("  report      Generate audit report from previous scan\n");
     printf("  panic       Show recommendations to disable all blockable components\n");
     printf("  smm-scan    Scan SMM (System Management Mode) security configuration\n");
@@ -93,6 +97,14 @@ void cli_print_usage(const char *prog_name) {
     printf("      --html       Output as a self-contained HTML report (scan/block)\n");
     printf("      --sarif      Output as SARIF 2.1.0 (scan/block)\n");
     printf("      --history    Save into the drift history store (baseline-capture)\n");
+    printf("      --apply      Perform hardening actions (default is dry-run)\n");
+    printf("      --yes        Skip confirmation for --apply hardening actions\n");
+    printf("      --dangerous  Include future dangerous-tier actions (HAP/UEFI gated)\n");
+    printf("      --iommu      Select IOMMU kernel-cmdline hardening\n");
+    printf("      --wol        Select Wake-on-LAN disable\n");
+    printf("      --no-wol     Exclude Wake-on-LAN disable\n");
+    printf("      --amt        Select OS-side Intel AMT/LMS masking\n");
+    printf("      --list-backups List FirmwareGuard backups with rollback command\n");
     printf("  -o, --output     Output file, or history dir for baseline-drift\n");
     printf("  -v, --verbose    Verbose output\n");
     printf("  -b, --brief      Brief/quick output (for smm-scan)\n");
@@ -102,6 +114,9 @@ void cli_print_usage(const char *prog_name) {
     printf("  %s scan                    # Scan system\n", prog_name);
     printf("  %s scan --json -o report.json\n", prog_name);
     printf("  %s block                   # Generate blocking recommendations\n", prog_name);
+    printf("  %s harden                  # Dry-run reversible hardening plan\n", prog_name);
+    printf("  %s harden --apply --yes    # Apply Tier-1 hardening with backups\n", prog_name);
+    printf("  %s rollback                # Restore latest rollback point\n", prog_name);
     printf("  %s panic                   # Show all mitigation options\n", prog_name);
     printf("  %s smm-scan                # Scan SMM security\n", prog_name);
     printf("  %s smm-scan --brief        # Quick SMM status\n", prog_name);
