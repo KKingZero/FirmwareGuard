@@ -14,6 +14,18 @@ LDFLAGS = -lm -lsqlite3 -lssl -lcrypto -lpthread -pie -Wl,-z,relro,-z,now -Wl,-z
 ifeq ($(STRICT),1)
 CFLAGS += -Werror
 endif
+
+# Architecture detection. On ARM/aarch64 we build a reduced binary containing
+# only architecture-neutral commands; the x86-only modules (MSR/SMM/Boot Guard/
+# TXT/SGX/ME/baseline) use CPUID/RDMSR and are excluded from the build entirely.
+# Override with: make ARCH=aarch64  (e.g. to simulate the ARM build on x86).
+ARCH ?= $(shell uname -m)
+ifeq ($(filter aarch64 arm armv7l armv6l,$(ARCH)),)
+  FG_ARM := 0
+else
+  FG_ARM := 1
+  CFLAGS += -DFG_BUILD_ARM
+endif
 INSTALL = install
 INSTALL_DIR = /usr/local/bin
 SYSTEMD_DIR = /etc/systemd/system
@@ -115,7 +127,8 @@ CLI_SRCS = $(CLI_DIR)/cli_table.c \
            $(CLI_DIR)/cli_trustedboot.c \
            $(CLI_DIR)/cli_baseline.c \
            $(CLI_DIR)/cli_detect.c \
-           $(CLI_DIR)/cli_modules.c
+           $(CLI_DIR)/cli_modules.c \
+           $(CLI_DIR)/cli_arm.c
 
 # cJSON library
 CJSON_SRC = $(SRC_DIR)/cJSON.c
@@ -159,6 +172,24 @@ ALL_OBJS = $(CORE_OBJS) $(BLOCK_OBJS) $(AUDIT_OBJS) $(SAFETY_OBJS) \
            $(DETECT_OBJS) $(COMPLIANCE_OBJS) \
            $(DATABASE_OBJS) $(ROOTKIT_OBJS) $(INTEGRITY_OBJS) $(MONITOR_OBJS) \
            $(CLI_OBJS) $(CJSON_OBJ) $(MAIN_OBJ)
+
+# --- ARM build: reduced, architecture-neutral object/source set ---
+ARM_DETECT_DIR  = $(SRC_DIR)/arm
+ARM_DETECT_SRCS = $(ARM_DETECT_DIR)/arm_detect.c
+ARM_DETECT_OBJS = $(patsubst $(ARM_DETECT_DIR)/%.c,$(BUILD_DIR)/armdet_%.o,$(ARM_DETECT_SRCS))
+
+ifeq ($(FG_ARM),1)
+ALL_SRCS = $(CORE_DIR)/acpi.c $(CORE_DIR)/nic.c \
+           $(UEFI_DIR)/uefi_vars.c $(SAFETY_SRCS) \
+           $(DETECT_DIR)/uefi_extract.c $(DETECT_DIR)/fg_hash.c \
+           $(DATABASE_SRCS) $(ROOTKIT_SRCS) $(INTEGRITY_SRCS) \
+           $(ARM_DETECT_SRCS) $(CLI_SRCS) $(CJSON_SRC) $(MAIN_SRC)
+ALL_OBJS = $(BUILD_DIR)/core_acpi.o $(BUILD_DIR)/core_nic.o \
+           $(BUILD_DIR)/uefi_uefi_vars.o $(SAFETY_OBJS) \
+           $(BUILD_DIR)/detect_uefi_extract.o $(BUILD_DIR)/detect_fg_hash.o \
+           $(DATABASE_OBJS) $(ROOTKIT_OBJS) $(INTEGRITY_OBJS) \
+           $(ARM_DETECT_OBJS) $(CLI_OBJS) $(CJSON_OBJ) $(MAIN_OBJ)
+endif
 
 # Default target
 .PHONY: all
@@ -284,6 +315,10 @@ $(BUILD_DIR)/compliance_%.o: $(COMPLIANCE_DIR)/%.c
 	@$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/cli_%.o: $(CLI_DIR)/%.c
+	@echo "Compiling $<..."
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/armdet_%.o: $(ARM_DETECT_DIR)/%.c
 	@echo "Compiling $<..."
 	@$(CC) $(CFLAGS) -c $< -o $@
 

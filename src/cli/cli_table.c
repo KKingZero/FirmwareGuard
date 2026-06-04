@@ -7,6 +7,46 @@
 
 #include "cli.h"
 
+#ifdef FG_BUILD_ARM
+/*
+ * ARM build: only architecture-neutral commands run real handlers. x86-only
+ * command names are kept (so scripts get a clear message) but resolve to the
+ * not-applicable stub.
+ */
+const cli_command_t CLI_COMMANDS[] = {
+    { "arm-detect",        cmd_arm_detect,        "Detect ARM firmware surfaces (UEFI/ACPI/DeviceTree/TEE)" },
+    { "acpi-scan",         cmd_acpi_scan,         "Scan ACPI tables for firmware telemetry indicators" },
+    { "nic-scan",          cmd_nic_scan,          "Profile network interfaces (WoL, firmware nodes)" },
+    { "uefi-enum",         cmd_uefi_enum,         "Enumerate UEFI variables and check Secure Boot status" },
+    { "cve-check",         cmd_cve_check,         "Check a component/version against the CVE database" },
+    { "threat-scan",       cmd_threat_scan,       "Hash a file and check it against threat-intel IOCs" },
+    { "rootkit-scan",      cmd_rootkit_scan,      "Scan a firmware image for known rootkit signatures" },
+    { "integrity-verify",  cmd_integrity_verify,  "Verify a firmware file against known-good checksums" },
+    { "panic",             cmd_panic,             "Show recommendations to disable blockable components" },
+    /* x86-only command names — present but not applicable on ARM */
+    { "scan",              cmd_not_applicable,    "(x86-only) hardware telemetry scan" },
+    { "block",             cmd_not_applicable,    "(x86-only) telemetry blocking" },
+    { "report",            cmd_not_applicable,    "(x86-only) audit report" },
+    { "smm-scan",          cmd_not_applicable,    "(x86-only) SMM security scan" },
+    { "uefi-extract",      cmd_not_applicable,    "(x86-only) SPI flash extraction" },
+    { "bootguard-status",  cmd_not_applicable,    "(x86-only) Intel Boot Guard status" },
+    { "bootguard-policy",  cmd_not_applicable,    "(x86-only) Intel Boot Guard policy" },
+    { "secureboot-audit",  cmd_not_applicable,    "(x86-only) Secure Boot key audit" },
+    { "txt-audit",         cmd_not_applicable,    "(x86-only) Intel TXT audit" },
+    { "sgx-enum",          cmd_not_applicable,    "(x86-only) Intel SGX enumeration" },
+    { "tpm-measurements",  cmd_not_applicable,    "(x86-only) TPM PCR analysis" },
+    { "trusted-boot-full", cmd_not_applicable,    "(x86-only) full trusted boot analysis" },
+    { "baseline-capture",  cmd_not_applicable,    "(x86-only) system baseline capture" },
+    { "baseline-compare",  cmd_not_applicable,    "(x86-only) baseline comparison" },
+    { "baseline-drift",    cmd_not_applicable,    "(x86-only) baseline drift history" },
+    { "implant-scan",      cmd_not_applicable,    "(x86-only) hardware implant scan" },
+    { "intel-me",          cmd_not_applicable,    "(x86-only) Intel ME detection" },
+    { "amd-psp",           cmd_not_applicable,    "(x86-only) AMD PSP detection" },
+    { "compliance",        cmd_not_applicable,    "(x86-only) compliance assessment" },
+    { "heci-monitor",      cmd_not_applicable,    "(x86-only) Intel ME/HECI monitor" },
+    { "spi-status",        cmd_not_applicable,    "(x86-only) SPI flash protection status" },
+};
+#else
 const cli_command_t CLI_COMMANDS[] = {
     { "scan",              cmd_scan,              "Scan system for firmware telemetry components" },
     { "block",             cmd_block,             "Attempt to block detected telemetry (non-destructive)" },
@@ -39,6 +79,7 @@ const cli_command_t CLI_COMMANDS[] = {
     { "heci-monitor",      cmd_heci_monitor,      "Monitor Intel ME/HECI traffic (requires /dev/mei0)" },
     { "spi-status",        cmd_spi_status,        "Show SPI flash write-protection status (requires kernel module)" },
 };
+#endif /* FG_BUILD_ARM */
 
 const size_t CLI_COMMAND_COUNT = sizeof(CLI_COMMANDS) / sizeof(CLI_COMMANDS[0]);
 
@@ -52,6 +93,32 @@ const cli_command_t *cli_find_command(const char *name) {
 }
 
 void cli_print_usage(const char *prog_name) {
+#ifdef FG_BUILD_ARM
+    printf("\n");
+    printf("FirmwareGuard v%s (ARM build) - Firmware Surface Auditor\n", FG_VERSION);
+    printf("\n");
+    printf("Usage: %s <command> [options]\n", prog_name);
+    printf("\n");
+    printf("Commands (architecture-neutral):\n");
+    printf("  arm-detect        Detect ARM firmware surfaces (UEFI/ACPI/DeviceTree/TEE)\n");
+    printf("  acpi-scan         Scan ACPI tables for firmware telemetry indicators\n");
+    printf("  nic-scan          Profile network interfaces (WoL, firmware nodes)\n");
+    printf("  uefi-enum         Enumerate UEFI variables and check Secure Boot status\n");
+    printf("  cve-check         Check a component/version against the CVE database\n");
+    printf("  threat-scan       Hash a file and check it against threat-intel IOCs\n");
+    printf("  rootkit-scan      Scan a firmware image for known rootkit signatures\n");
+    printf("  integrity-verify  Verify a firmware file against known-good checksums\n");
+    printf("  panic             Show mitigation recommendations\n");
+    printf("\n");
+    printf("Options:\n");
+    printf("  -j, --json       Output in JSON format\n");
+    printf("  -v, --verbose    Verbose output\n");
+    printf("  -h, --help       Show this help message\n");
+    printf("\n");
+    printf("Note: x86-only commands (scan, smm-scan, bootguard-*, txt-audit, intel-me,\n");
+    printf("      baseline-*, compliance, ...) are not available in the ARM build.\n");
+    printf("\n");
+#else
     printf("\n");
     printf("FirmwareGuard v%s - Firmware Integrity & Anomaly Detection Framework\n", FG_VERSION);
     printf("\n");
@@ -112,4 +179,5 @@ void cli_print_usage(const char *prog_name) {
     printf("\n");
     printf("Note: Most operations require root privileges.\n");
     printf("\n");
+#endif /* FG_BUILD_ARM */
 }

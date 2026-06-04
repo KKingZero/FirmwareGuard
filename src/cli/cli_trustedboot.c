@@ -8,6 +8,8 @@
 #include "../detection/bootguard_detect.h"
 #include "../detection/txt_sgx_detect.h"
 
+#ifndef FG_BUILD_ARM  /* Boot Guard / Secure Boot / TXT / SGX / TPM are x86-only */
+
 int cmd_bootguard_status(int argc, char **argv, const cli_opts_t *o) {
     (void)argc; (void)argv;
     bool json_output = o->json;
@@ -254,3 +256,5 @@ int cmd_trusted_boot_full(int argc, char **argv, const cli_opts_t *o) {
     txt_sgx_cleanup();
     return ret == FG_NOT_SUPPORTED ? FG_SUCCESS : ret;
 }
+
+#endif /* !FG_BUILD_ARM */

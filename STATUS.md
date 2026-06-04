@@ -57,6 +57,25 @@ JSON corpora in `data/` (`cve_firmware.json`, `threat_intel.json`,
 The HECI and SPI monitors degrade gracefully when `/dev/mei0` / `/dev/fwguard`
 are absent.
 
+## ARM / aarch64 Build (this branch)
+
+On `aarch64`/`arm*` hosts (or with `make ARCH=aarch64`), the Makefile builds a
+reduced, architecture-neutral binary. The x86-only modules (MSR, SMM, Boot Guard,
+TXT/SGX, ME/PSP, baseline, implant, compliance, HECI/SPI) use CPUID/RDMSR and are
+excluded from the build entirely; their command names remain registered but
+resolve to a clean "not applicable on this architecture" stub.
+
+ARM commands with real handlers:
+
+- `arm-detect` — ARM firmware-surface detection (UEFI/ACPI/DeviceTree/TEE/OP-TEE)
+- `acpi-scan`, `nic-scan`, `uefi-enum` — architecture-neutral telemetry/probes
+- `cve-check`, `threat-scan`, `rootkit-scan`, `integrity-verify` — DB/file based
+- `panic` — mitigation guidance
+
+Deferred for ARM: `baseline-capture/compare/drift` (reads x86 CPUID/MSR; an ARM
+`/proc/cpuinfo` path is planned) and `compliance` (x86-centric control mapping).
+The standalone `firmwareguard-arm` sidecar (`make -f Makefile.arm`) is unchanged.
+
 ## Source Present But Not Default-CLI Wired (Deferred)
 
 These modules remain in-tree but are intentionally not linked into the default

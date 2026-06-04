@@ -11,6 +11,8 @@
 #include "../audit/reporter.h"
 #include "../audit/sarif.h"
 
+#ifndef FG_BUILD_ARM  /* scan/block drive the x86 hardware probe + blocker */
+
 int cmd_scan(int argc, char **argv, const cli_opts_t *o) {
     (void)argc; (void)argv;
     report_format_t fmt = o->report_fmt;
@@ -152,6 +154,8 @@ cleanup:
     reporter_cleanup();
     return ret;
 }
+
+#endif /* !FG_BUILD_ARM */
 
 int cmd_panic(int argc, char **argv, const cli_opts_t *o) {
     (void)argc; (void)argv; (void)o;

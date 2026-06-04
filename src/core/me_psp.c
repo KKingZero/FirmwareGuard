@@ -121,6 +121,7 @@ int probe_intel_me(intel_me_info_t *info) {
     if (!info) {
         return FG_ERROR;
     }
+    FG_REQUIRE_X86();
 
     memset(info, 0, sizeof(*info));
     snprintf(info->version, sizeof(info->version), "unknown");
@@ -154,6 +155,7 @@ int probe_amd_psp(amd_psp_info_t *info) {
     if (!info) {
         return FG_ERROR;
     }
+    FG_REQUIRE_X86();
 
     memset(info, 0, sizeof(*info));
     snprintf(info->version, sizeof(info->version), "unknown");

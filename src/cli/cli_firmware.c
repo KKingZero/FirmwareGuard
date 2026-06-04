@@ -8,6 +8,8 @@
 #include "../detection/smm_detect.h"
 #include "../detection/uefi_extract.h"
 
+#ifndef FG_BUILD_ARM  /* SMM scanning is x86-only */
+
 int cmd_smm_scan(int argc, char **argv, const cli_opts_t *o) {
     (void)argc; (void)argv;
     bool json_output = o->json;
@@ -91,6 +93,8 @@ int cmd_smm_scan(int argc, char **argv, const cli_opts_t *o) {
     return FG_SUCCESS;
 }
 
+#endif /* !FG_BUILD_ARM */
+
 int cmd_uefi_enum(int argc, char **argv, const cli_opts_t *o) {
     (void)argc; (void)argv;
     bool json_output = o->json;
@@ -157,6 +161,7 @@ int cmd_uefi_enum(int argc, char **argv, const cli_opts_t *o) {
     return FG_SUCCESS;
 }
 
+#ifndef FG_BUILD_ARM  /* SPI flash extraction is x86-only */
 int cmd_uefi_extract(int argc, char **argv, const cli_opts_t *o) {
     (void)argc; (void)argv;
     bool json_output = o->json;
@@ -221,3 +226,4 @@ int cmd_uefi_extract(int argc, char **argv, const cli_opts_t *o) {
 
     return FG_SUCCESS;
 }
+#endif /* !FG_BUILD_ARM */

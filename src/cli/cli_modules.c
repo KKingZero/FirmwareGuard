@@ -300,7 +300,8 @@ int cmd_integrity_verify(int argc, char **argv, const cli_opts_t *o) {
     return FG_SUCCESS;
 }
 
-/* ---- heci-monitor ----------------------------------------------------- */
+/* ---- heci-monitor / spi-status (x86 platform monitors) ---------------- */
+#ifndef FG_BUILD_ARM
 
 int cmd_heci_monitor(int argc, char **argv, const cli_opts_t *o) {
     (void)argc; (void)argv; (void)o;
@@ -375,3 +376,5 @@ int cmd_spi_status(int argc, char **argv, const cli_opts_t *o) {
     spi_monitor_cleanup();
     return FG_SUCCESS;
 }
+
+#endif /* !FG_BUILD_ARM */

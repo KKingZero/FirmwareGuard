@@ -13,6 +13,8 @@
 #include "../detection/implant_detect.h"
 #include "../compliance/compliance.h"
 
+#ifndef FG_BUILD_ARM  /* implant scan is x86 (CPUID/MSR) */
+
 int cmd_implant_scan(int argc, char **argv, const cli_opts_t *o) {
     (void)argc; (void)argv;
     bool json_output = o->json;
@@ -50,6 +52,8 @@ int cmd_implant_scan(int argc, char **argv, const cli_opts_t *o) {
     implant_detect_cleanup();
     return FG_SUCCESS;
 }
+
+#endif /* !FG_BUILD_ARM */
 
 int cmd_acpi_scan(int argc, char **argv, const cli_opts_t *o) {
     (void)argc; (void)argv;
@@ -101,6 +105,7 @@ int cmd_nic_scan(int argc, char **argv, const cli_opts_t *o) {
     return FG_SUCCESS;
 }
 
+#ifndef FG_BUILD_ARM  /* intel-me / amd-psp / compliance are x86-only */
 int cmd_intel_me(int argc, char **argv, const cli_opts_t *o) {
     (void)argc; (void)argv;
     bool json_output = o->json;
@@ -226,3 +231,4 @@ int cmd_compliance(int argc, char **argv, const cli_opts_t *o) {
 
     return FG_SUCCESS;
 }
+#endif /* !FG_BUILD_ARM */

@@ -81,6 +81,10 @@ int cmd_intel_me(int argc, char **argv, const cli_opts_t *o);
 int cmd_amd_psp(int argc, char **argv, const cli_opts_t *o);
 int cmd_compliance(int argc, char **argv, const cli_opts_t *o);
 
+/* ---- ARM build helpers (cli_arm.c) ---- */
+int cmd_not_applicable(int argc, char **argv, const cli_opts_t *o);
+int cmd_arm_detect(int argc, char **argv, const cli_opts_t *o);
+
 /* ---- Handlers: Phase-4 modules (cli_modules.c) ---- */
 int cmd_cve_check(int argc, char **argv, const cli_opts_t *o);
 int cmd_threat_scan(int argc, char **argv, const cli_opts_t *o);

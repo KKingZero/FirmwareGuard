@@ -52,3 +52,28 @@ jobs:
       run: make fuzz
     - name: Fuzz smoke run (30s)
       run: ./build/fuzz_hash -max_total_time=30 -timeout=10
+
+  arm-build:
+    # Validates the FG_BUILD_ARM object partition: the reduced, architecture-
+    # neutral binary compiles, links, and exposes only portable commands.
+    # Built with native gcc + ARCH=aarch64 (the code is portable C); a true
+    # aarch64 toolchain build is tracked separately.
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libssl-dev libsqlite3-dev
+    - name: Build ARM (architecture-neutral) binary
+      run: make ARCH=aarch64 CC=/usr/bin/gcc
+    - name: Smoke-test the ARM command surface
+      run: |
+        ./firmwareguard --help | grep -q "ARM build"
+        ./firmwareguard arm-detect
+        ./firmwareguard acpi-scan --json
+        ./firmwareguard cve-check "Intel Management Engine (ME)" 6.0.0
+        # x86-only command must report not-applicable (non-zero exit)
+        if ./firmwareguard smm-scan; then echo "smm-scan should have failed on ARM"; exit 1; fi
+    - name: ARM-safe sidecar tests
+      run: make -f Makefile.arm test CC=/usr/bin/gcc

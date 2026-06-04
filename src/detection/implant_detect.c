@@ -599,6 +599,7 @@ int implant_scan_firmware(implant_scan_result_t *result) {
  * ============================================================================ */
 
 int implant_full_scan(implant_scan_result_t *result) {
+    FG_REQUIRE_X86();
     memset(result, 0, sizeof(implant_scan_result_t));
 
     result->scan_time = time(NULL);

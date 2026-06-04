@@ -7,6 +7,9 @@
 #include "cli.h"
 #include "../detection/baseline_capture.h"
 
+/* Baseline capture reads x86 CPUID/MSR state; deferred on ARM (see ROADMAP). */
+#ifndef FG_BUILD_ARM
+
 int cmd_baseline_capture(int argc, char **argv, const cli_opts_t *o) {
     (void)argc; (void)argv;
     bool json_output = o->json;
@@ -154,3 +157,5 @@ int cmd_baseline_compare(int argc, char **argv, const cli_opts_t *o) {
     baseline_cleanup();
     return FG_SUCCESS;
 }
+
+#endif /* !FG_BUILD_ARM */
