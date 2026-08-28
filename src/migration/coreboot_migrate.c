@@ -8,14 +8,157 @@
 #include <time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <errno.h>
+#include <openssl/evp.h>
 
 /* OFFLINE-ONLY: No network connectivity */
 
 /* Global board database */
 static coreboot_board_info_t *board_database = NULL;
 static int board_database_count = 0;
+
+static bool resolve_trusted_command(const char *name, char *out, size_t out_size);
+static int run_program_silent(char *const argv[]);
+static FILE *spawn_program_read(char *const argv[], pid_t *pid_out);
+static int close_spawned_program(FILE *fp, pid_t pid);
+static int compute_sha256_file(const char *path, char hash_out[65]);
+
+static bool resolve_trusted_command(const char *name, char *out, size_t out_size) {
+    static const char *trusted_dirs[] = {
+        "/usr/sbin", "/usr/bin", "/usr/local/sbin", "/usr/local/bin", "/sbin", "/bin", NULL
+    };
+
+    if (!name || strchr(name, '/')) {
+        return false;
+    }
+
+    for (int i = 0; trusted_dirs[i]; i++) {
+        char candidate[512];
+        if (snprintf(candidate, sizeof(candidate), "%s/%s", trusted_dirs[i], name) >=
+            (int)sizeof(candidate)) {
+            continue;
+        }
+        if (access(candidate, X_OK) == 0) {
+            if (strlen(candidate) >= out_size) {
+                return false;
+            }
+            memcpy(out, candidate, strlen(candidate) + 1);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static int run_program_silent(char *const argv[]) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            close(devnull);
+        }
+        execv(argv[0], argv);
+        _exit(127);
+    }
+    if (pid < 0) {
+        return FG_ERROR;
+    }
+
+    int status = 0;
+    if (waitpid(pid, &status, 0) < 0) {
+        return FG_ERROR;
+    }
+
+    return (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? FG_SUCCESS : FG_ERROR;
+}
+
+static FILE *spawn_program_read(char *const argv[], pid_t *pid_out) {
+    int fds[2];
+    if (!pid_out || pipe(fds) != 0) {
+        return NULL;
+    }
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        close(fds[0]);
+        dup2(fds[1], STDOUT_FILENO);
+        dup2(fds[1], STDERR_FILENO);
+        close(fds[1]);
+        execv(argv[0], argv);
+        _exit(127);
+    }
+
+    close(fds[1]);
+    if (pid < 0) {
+        close(fds[0]);
+        return NULL;
+    }
+
+    FILE *fp = fdopen(fds[0], "r");
+    if (!fp) {
+        close(fds[0]);
+        waitpid(pid, NULL, 0);
+        return NULL;
+    }
+
+    *pid_out = pid;
+    return fp;
+}
+
+static int close_spawned_program(FILE *fp, pid_t pid) {
+    int status = 0;
+    if (fp) {
+        fclose(fp);
+    }
+    if (waitpid(pid, &status, 0) < 0) {
+        return FG_ERROR;
+    }
+    return (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? FG_SUCCESS : FG_ERROR;
+}
+
+static int compute_sha256_file(const char *path, char hash_out[65]) {
+    FILE *fp = fopen(path, "rb");
+    if (!fp) {
+        return FG_ERROR;
+    }
+
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        fclose(fp);
+        return FG_ERROR;
+    }
+    if (EVP_DigestInit_ex(ctx, EVP_sha256(), NULL) != 1) {
+        EVP_MD_CTX_free(ctx);
+        fclose(fp);
+        return FG_ERROR;
+    }
+
+    unsigned char buffer[8192];
+    size_t bytes;
+    while ((bytes = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+        EVP_DigestUpdate(ctx, buffer, bytes);
+    }
+    fclose(fp);
+
+    unsigned char hash[EVP_MAX_MD_SIZE];
+    unsigned int hash_len = 0;
+    if (EVP_DigestFinal_ex(ctx, hash, &hash_len) != 1 || hash_len < 32) {
+        EVP_MD_CTX_free(ctx);
+        return FG_ERROR;
+    }
+    EVP_MD_CTX_free(ctx);
+
+    for (unsigned int i = 0; i < 32; i++) {
+        snprintf(hash_out + (i * 2), 3, "%02x", hash[i]);
+    }
+    hash_out[64] = '\0';
+    return FG_SUCCESS;
+}
 
 /* ============================================================================
  * Helper Functions
@@ -41,27 +184,6 @@ const char* coreboot_risk_to_str(migration_risk_t risk) {
         case MIGRATION_RISK_CRITICAL: return "CRITICAL";
         default:                      return "UNKNOWN";
     }
-}
-
-/* Helper: Read DMI value from sysfs */
-static int read_dmi_value(const char *filename, char *buf, size_t size) {
-    char path[256];
-    snprintf(path, sizeof(path), "/sys/class/dmi/id/%s", filename);
-
-    FILE *fp = fopen(path, "r");
-    if (!fp) {
-        return FG_ERROR;
-    }
-
-    if (fgets(buf, size, fp)) {
-        /* Remove trailing newline */
-        buf[strcspn(buf, "\n")] = 0;
-        fclose(fp);
-        return FG_SUCCESS;
-    }
-
-    fclose(fp);
-    return FG_ERROR;
 }
 
 /* Helper: Case-insensitive string matching */
@@ -377,10 +499,10 @@ int coreboot_check_compatibility(coreboot_compat_result_t *result) {
     }
 
     /* Copy BIOS info for display */
-    strncpy(result->current_bios_vendor, result->detected_dmi.bios_vendor,
-            sizeof(result->current_bios_vendor) - 1);
-    strncpy(result->current_bios_version, result->detected_dmi.bios_version,
-            sizeof(result->current_bios_version) - 1);
+    snprintf(result->current_bios_vendor, sizeof(result->current_bios_vendor),
+             "%s", result->detected_dmi.bios_vendor);
+    snprintf(result->current_bios_version, sizeof(result->current_bios_version),
+             "%s", result->detected_dmi.bios_version);
 
     /* Check for Intel ME or AMD PSP */
     intel_me_info_t me_info;
@@ -439,13 +561,13 @@ int coreboot_check_compatibility(coreboot_compat_result_t *result) {
 
         if (result->board_info.requires_hardware_mod && result->warning_count < 16) {
             snprintf(result->warnings[result->warning_count++], 256,
-                    "Hardware modification required: %s",
+                    "Hardware modification required: %.220s",
                     result->board_info.hardware_mod_notes);
         }
 
         if (result->overall_risk >= MIGRATION_RISK_HIGH && result->warning_count < 16) {
             snprintf(result->warnings[result->warning_count++], 256,
-                    "HIGH RISK: %s", result->board_info.risk_notes);
+                    "HIGH RISK: %.244s", result->board_info.risk_notes);
         }
 
     } else {
@@ -572,7 +694,7 @@ int coreboot_backup_current(firmware_backup_t *backup) {
         /* Fallback to epoch time if localtime fails */
         snprintf(timestamp, sizeof(timestamp), "%ld", (long)now);
     }
-    strncpy(backup->timestamp, timestamp, sizeof(backup->timestamp) - 1);
+    snprintf(backup->timestamp, sizeof(backup->timestamp), "%s", timestamp);
 
     /* Create backup directory if it doesn't exist */
     const char *backup_dir = "/var/lib/firmwareguard/backups";
@@ -582,30 +704,20 @@ int coreboot_backup_current(firmware_backup_t *backup) {
     snprintf(backup->backup_path, sizeof(backup->backup_path),
             "%s/firmware_backup_%s.bin", backup_dir, timestamp);
 
-    /* Execute flashrom to read firmware */
-    char cmd[1024];
-    snprintf(cmd, sizeof(cmd),
-            "flashrom -p internal -r \"%s\" 2>&1",
-            backup->backup_path);
-
     FG_INFO("Executing: flashrom -p internal -r %s", backup->backup_path);
     FG_WARN("This may take several minutes...");
 
-    FILE *fp = popen(cmd, "r");
-    if (!fp) {
+    char flashrom_path[512];
+    if (!resolve_trusted_command("flashrom", flashrom_path, sizeof(flashrom_path))) {
+        FG_LOG_ERROR("flashrom is not available - cannot backup firmware");
+        return FG_NOT_FOUND;
+    }
+
+    char *flashrom_args[] = {
+        flashrom_path, "-p", "internal", "-r", backup->backup_path, NULL
+    };
+    if (run_program_silent(flashrom_args) != FG_SUCCESS) {
         FG_LOG_ERROR("Failed to execute flashrom");
-        return FG_ERROR;
-    }
-
-    /* Read flashrom output */
-    char line[256];
-    while (fgets(line, sizeof(line), fp)) {
-        FG_DEBUG("%s", line);
-    }
-
-    int status = pclose(fp);
-    if (status != 0) {
-        FG_LOG_ERROR("flashrom failed with status %d", status);
         return FG_ERROR;
     }
 
@@ -621,19 +733,7 @@ int coreboot_backup_current(firmware_backup_t *backup) {
             backup->backup_path, (unsigned long long)backup->flash_size);
 
     /* Calculate SHA-256 hash */
-    snprintf(cmd, sizeof(cmd), "sha256sum \"%s\" 2>/dev/null", backup->backup_path);
-    fp = popen(cmd, "r");
-    if (fp) {
-        if (fgets(line, sizeof(line), fp)) {
-            /* Extract hash (first field) */
-            char *space = strchr(line, ' ');
-            if (space) {
-                *space = '\0';
-                strncpy(backup->hash_sha256, line, sizeof(backup->hash_sha256) - 1);
-            }
-        }
-        pclose(fp);
-    }
+    compute_sha256_file(backup->backup_path, backup->hash_sha256);
 
     if (backup->hash_sha256[0] != '\0') {
         FG_INFO("Backup SHA-256: %s", backup->hash_sha256);
@@ -673,31 +773,15 @@ int coreboot_verify_backup(const firmware_backup_t *backup) {
 
     /* Verify hash if available */
     if (backup->hash_sha256[0] != '\0') {
-        char cmd[1024];
-        snprintf(cmd, sizeof(cmd), "sha256sum \"%s\" 2>/dev/null", backup->backup_path);
-
-        FILE *fp = popen(cmd, "r");
-        if (fp) {
-            char line[256];
-            if (fgets(line, sizeof(line), fp)) {
-                char hash[65] = {0};
-                char *space = strchr(line, ' ');
-                if (space) {
-                    *space = '\0';
-                    strncpy(hash, line, sizeof(hash) - 1);
-                }
-
-                if (strcmp(hash, backup->hash_sha256) == 0) {
-                    FG_INFO("Backup verification successful");
-                    pclose(fp);
-                    return FG_SUCCESS;
-                } else {
-                    FG_LOG_ERROR("Hash mismatch - backup may be corrupted");
-                    pclose(fp);
-                    return FG_ERROR;
-                }
+        char hash[65] = {0};
+        if (compute_sha256_file(backup->backup_path, hash) == FG_SUCCESS) {
+            if (strcmp(hash, backup->hash_sha256) == 0) {
+                FG_INFO("Backup verification successful");
+                return FG_SUCCESS;
+            } else {
+                FG_LOG_ERROR("Hash mismatch - backup may be corrupted");
+                return FG_ERROR;
             }
-            pclose(fp);
         }
     }
 
@@ -710,17 +794,15 @@ int coreboot_verify_backup(const firmware_backup_t *backup) {
  * ============================================================================ */
 
 int coreboot_check_flashrom(void) {
-    /* Check if flashrom is installed */
-    int ret = system("which flashrom >/dev/null 2>&1");
-    if (ret != 0) {
+    char flashrom_path[512];
+    if (!resolve_trusted_command("flashrom", flashrom_path, sizeof(flashrom_path))) {
         FG_WARN("flashrom is not installed");
         FG_INFO("Install with: sudo apt install flashrom");
         return FG_NOT_FOUND;
     }
 
-    /* Check if we have permissions */
-    ret = system("flashrom --version >/dev/null 2>&1");
-    if (ret != 0) {
+    char *version_args[] = { flashrom_path, "--version", NULL };
+    if (run_program_silent(version_args) != FG_SUCCESS) {
         FG_WARN("Cannot execute flashrom");
         return FG_NO_PERMISSION;
     }
@@ -735,8 +817,14 @@ int coreboot_detect_flash_chip(flash_chip_info_t *chip) {
 
     memset(chip, 0, sizeof(flash_chip_info_t));
 
-    /* Execute flashrom to detect chip */
-    FILE *fp = popen("flashrom -p internal 2>&1", "r");
+    char flashrom_path[512];
+    if (!resolve_trusted_command("flashrom", flashrom_path, sizeof(flashrom_path))) {
+        return FG_NOT_FOUND;
+    }
+
+    char *flashrom_args[] = { flashrom_path, "-p", "internal", NULL };
+    pid_t pid = 0;
+    FILE *fp = spawn_program_read(flashrom_args, &pid);
     if (!fp) {
         return FG_ERROR;
     }
@@ -761,7 +849,7 @@ int coreboot_detect_flash_chip(flash_chip_info_t *chip) {
         }
     }
 
-    pclose(fp);
+    close_spawned_program(fp, pid);
 
     if (chip->model[0] != '\0') {
         strncpy(chip->interface, "SPI", sizeof(chip->interface) - 1);

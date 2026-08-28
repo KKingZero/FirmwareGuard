@@ -28,6 +28,10 @@ int main(int argc, char **argv) {
     bool wol = false;
     bool no_wol = false;
     bool amt = false;
+    bool acpi = false;
+    bool optionrom = false;
+    bool spi = false;
+    bool smram = false;
     const char *output_file = NULL;
     const char *command = NULL;
 
@@ -43,7 +47,11 @@ int main(int argc, char **argv) {
         OPT_IOMMU,
         OPT_WOL,
         OPT_NO_WOL,
-        OPT_AMT
+        OPT_AMT,
+        OPT_ACPI,
+        OPT_OPTIONROM,
+        OPT_SPI,
+        OPT_SMRAM
     };
 
     static struct option long_options[] = {
@@ -60,6 +68,10 @@ int main(int argc, char **argv) {
         {"wol",     no_argument,       0, OPT_WOL},
         {"no-wol",  no_argument,       0, OPT_NO_WOL},
         {"amt",     no_argument,       0, OPT_AMT},
+        {"acpi",    no_argument,       0, OPT_ACPI},
+        {"optionrom", no_argument,     0, OPT_OPTIONROM},
+        {"spi",     no_argument,       0, OPT_SPI},
+        {"smram",   no_argument,       0, OPT_SMRAM},
         {"output",  required_argument, 0, 'o'},
         {"verbose", no_argument,       0, 'v'},
         {"brief",   no_argument,       0, 'b'},
@@ -123,6 +135,18 @@ int main(int argc, char **argv) {
             case OPT_AMT:
                 amt = true;
                 break;
+            case OPT_ACPI:
+                acpi = true;
+                break;
+            case OPT_OPTIONROM:
+                optionrom = true;
+                break;
+            case OPT_SPI:
+                spi = true;
+                break;
+            case OPT_SMRAM:
+                smram = true;
+                break;
             case 'v':
                 verbose = true;
                 break;
@@ -162,6 +186,10 @@ int main(int argc, char **argv) {
         .wol = wol,
         .no_wol = no_wol,
         .amt = amt,
+        .acpi = acpi,
+        .optionrom = optionrom,
+        .spi = spi,
+        .smram = smram,
         .output_file = output_file,
         .report_fmt = report_fmt,
     };

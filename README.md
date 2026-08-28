@@ -14,9 +14,10 @@ Built for **security researchers, hardware engineers, and privacy-focused operat
 ## Current Verified Status
 
 The current tree is in build-stabilization state. The default userspace CLI,
-ARM-safe test target, safety tests, and kernel module build have been restored,
-but several Phase 4 research modules remain source-present prototypes until
-they are wired into the main CLI and CI.
+ARM-safe test target, safety tests, and kernel module build have been restored.
+The default CLI now also includes read-only UEFI integrity checks, Coreboot
+compatibility advisory output, local Ghidra firmware analysis, and a gated
+live-dump capability path.
 
 See [STATUS.md](STATUS.md) for the verified command surface and prototype list.
 
@@ -106,6 +107,12 @@ MSR writes, and ME-cleaner style firmware modification are not part of Tier 1.
 ### ✅ Extensible Architecture
 - **Kernel Module (Optional)**: Provides a mechanism for kernel-level MMIO region tracking and DMA restriction.
 - **Configuration System**: Manages settings and state via a clear configuration file (`/etc/firmwareguard/config.conf`).
+
+### ✅ Graduated Analysis Modules
+- **UEFI Runtime Integrity**: `firmwareguard uefi-integrity [--brief] [--json] [-o path]` reads EFI runtime state and reports integrity risk without modifying firmware.
+- **Coreboot Advisory**: `firmwareguard coreboot-check [--json]` loads the bundled board database and reports migration readiness without backing up or flashing firmware.
+- **Local Ghidra Analysis**: `firmwareguard ghidra-analyze <firmware.bin> [--json] [-o dir]` runs bundled scripts against a local Ghidra install from `GHIDRA_HOME` or common install paths.
+- **Live Dump Capability Check**: `firmwareguard live-dump` is a dry-run by default. Actual `--spi` and `--smram` dumps require `--dangerous`, root, and confirmation unless `--yes` is supplied.
 
 ### ✅ Enhanced Security & CI/CD (Build Stabilization)
 - **CI Coverage**: GitHub Actions builds the default CLI and runs available unit tests.
@@ -495,10 +502,13 @@ sudo ./firmwareguard block --json | jq -r '.actions[] | select(.successful==true
 
 **Note:** Web-based management features are not planned. FirmwareGuard remains a CLI security tool.
 
-### Phase 4 - Research & Innovation (Prototype/Planned)
+### Phase 4 - Research & Innovation (Partially Wired)
 - [ ] AI-powered anomaly detection in firmware behavior
-- [ ] Automated firmware binary analysis
-- [ ] Supply chain integrity verification
+- [x] Automated local firmware binary analysis (`ghidra-analyze`)
+- [x] Supply chain integrity verification (`integrity-verify`)
+- [x] UEFI runtime integrity advisory (`uefi-integrity`)
+- [x] Coreboot/Libreboot compatibility advisory (`coreboot-check`)
+- [x] Gated live dump capability checks (`live-dump`)
 
 ---
 

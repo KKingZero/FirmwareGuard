@@ -117,6 +117,7 @@ CLI_SRCS = $(CLI_DIR)/cli_table.c \
            $(CLI_DIR)/cli_baseline.c \
            $(CLI_DIR)/cli_detect.c \
            $(CLI_DIR)/cli_modules.c \
+           $(CLI_DIR)/cli_research.c \
            $(CLI_DIR)/cli_harden.c
 
 # cJSON library
@@ -124,12 +125,12 @@ CJSON_SRC = $(SRC_DIR)/cJSON.c
 
 MAIN_SRC = $(SRC_DIR)/main.c
 
-# Default userspace binary sources. Prototype/research modules remain in-tree
-# but are not linked until they have CLI wiring and build coverage.
+# Default userspace binary sources.
 ALL_SRCS = $(CORE_SRCS) $(BLOCK_SRCS) $(AUDIT_SRCS) $(SAFETY_SRCS) \
            $(CONFIG_MGMT_SRCS) $(UEFI_SRCS) $(GRUB_SRCS) $(PATTERN_SRCS) \
-           $(DETECT_SRCS) $(COMPLIANCE_SRCS) \
-           $(DATABASE_SRCS) $(ROOTKIT_SRCS) $(INTEGRITY_SRCS) $(MONITOR_SRCS) \
+           $(DETECT_SRCS) $(MIGRATE_SRCS) $(COMPLIANCE_SRCS) \
+           $(DATABASE_SRCS) $(ROOTKIT_SRCS) $(DUMP_SRCS) $(INTEGRITY_SRCS) \
+           $(GHIDRA_SRCS) $(MONITOR_SRCS) \
            $(CLI_SRCS) $(CJSON_SRC) $(MAIN_SRC)
 
 # Object files
@@ -154,12 +155,12 @@ CLI_OBJS = $(patsubst $(CLI_DIR)/%.c,$(BUILD_DIR)/cli_%.o,$(CLI_SRCS))
 CJSON_OBJ = $(BUILD_DIR)/cJSON.o
 MAIN_OBJ = $(BUILD_DIR)/main.o
 
-# Phase-4 modules wired into the default CLI (cve/threat/rootkit/integrity/monitor).
-# Ghidra, migration, and live-dump remain in-tree but unlinked (see STATUS.md).
+# Phase-4 modules wired into the default CLI.
 ALL_OBJS = $(CORE_OBJS) $(BLOCK_OBJS) $(AUDIT_OBJS) $(SAFETY_OBJS) \
            $(CONFIG_MGMT_OBJS) $(UEFI_OBJS) $(GRUB_OBJS) $(PATTERN_OBJS) \
-           $(DETECT_OBJS) $(COMPLIANCE_OBJS) \
-           $(DATABASE_OBJS) $(ROOTKIT_OBJS) $(INTEGRITY_OBJS) $(MONITOR_OBJS) \
+           $(DETECT_OBJS) $(MIGRATE_OBJS) $(COMPLIANCE_OBJS) \
+           $(DATABASE_OBJS) $(ROOTKIT_OBJS) $(DUMP_OBJS) $(INTEGRITY_OBJS) \
+           $(GHIDRA_OBJS) $(MONITOR_OBJS) \
            $(CLI_OBJS) $(CJSON_OBJ) $(MAIN_OBJ)
 
 # Default target
@@ -175,7 +176,7 @@ all: $(BUILD_DIR) $(TARGET) check-offline
 	@echo "Default CLI includes:"
 	@echo "  - Read-only hardware scan and block recommendations"
 	@echo "  - SMM, UEFI, Boot Guard, TXT/SGX, baseline, implant, compliance commands"
-	@echo "  - Prototype research modules remain in-tree; command wiring is deferred"
+	@echo "  - UEFI integrity, Coreboot advisory, Ghidra analysis, and gated live dump"
 	@echo ""
 	@echo "To install system-wide: sudo make install"
 	@echo "To build kernel module: make kernel"
@@ -343,7 +344,8 @@ install: $(TARGET)
 	@echo "  firmwareguard integrity verify <firmware.bin>"
 	@echo "  firmwareguard cve-check <component> <version>"
 	@echo "  firmwareguard coreboot-check"
-	@echo "  firmwareguard dump-live --acpi --optionrom"
+	@echo "  firmwareguard ghidra-analyze <firmware.bin>"
+	@echo "  firmwareguard live-dump --acpi --optionrom"
 	@echo "  firmwareguard heci-monitor"
 	@echo "  firmwareguard spi-status"
 	@echo ""

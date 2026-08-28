@@ -183,6 +183,19 @@ else
     TOTAL_FAIL=$((TOTAL_FAIL + 1))
 fi
 
+# --- Test 7: Graduated CLI smoke tests ---
+echo ""
+echo "--- Running graduated CLI smoke tests ---"
+if [ -x ./firmwareguard ]; then
+    if ./tools/test-graduated-cli.sh; then
+        TOTAL_PASS=$((TOTAL_PASS + 1))
+    else
+        TOTAL_FAIL=$((TOTAL_FAIL + 1))
+    fi
+else
+    echo "  Skipping: ./firmwareguard is not built"
+fi
+
 # --- Summary ---
 echo ""
 echo "============================================"

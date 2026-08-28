@@ -40,6 +40,10 @@ const cli_command_t CLI_COMMANDS[] = {
     { "integrity-verify",  cmd_integrity_verify,  "Verify a firmware file against known-good checksums" },
     { "heci-monitor",      cmd_heci_monitor,      "Monitor Intel ME/HECI traffic (requires /dev/mei0)" },
     { "spi-status",        cmd_spi_status,        "Show SPI flash write-protection status (requires kernel module)" },
+    { "uefi-integrity",    cmd_uefi_integrity,    "Read-only UEFI runtime integrity scan" },
+    { "coreboot-check",    cmd_coreboot_check,    "Read-only Coreboot/Libreboot compatibility advisory" },
+    { "ghidra-analyze",    cmd_ghidra_analyze,    "Analyze a firmware image with local Ghidra" },
+    { "live-dump",         cmd_live_dump,         "Dry-run firmware dump capabilities; explicit targets only" },
 };
 
 const size_t CLI_COMMAND_COUNT = sizeof(CLI_COMMANDS) / sizeof(CLI_COMMANDS[0]);
@@ -91,6 +95,10 @@ void cli_print_usage(const char *prog_name) {
     printf("  integrity-verify  Verify a firmware file against known-good checksums\n");
     printf("  heci-monitor      Monitor Intel ME/HECI traffic (requires /dev/mei0)\n");
     printf("  spi-status        Show SPI flash write-protection status\n");
+    printf("  uefi-integrity    Read-only UEFI runtime integrity scan\n");
+    printf("  coreboot-check    Coreboot/Libreboot compatibility advisory\n");
+    printf("  ghidra-analyze    Analyze firmware with local Ghidra\n");
+    printf("  live-dump         Dry-run dump capability check; explicit dump targets only\n");
     printf("\n");
     printf("Options:\n");
     printf("  -j, --json       Output in JSON format\n");
@@ -104,10 +112,14 @@ void cli_print_usage(const char *prog_name) {
     printf("      --wol        Select Wake-on-LAN disable\n");
     printf("      --no-wol     Exclude Wake-on-LAN disable\n");
     printf("      --amt        Select OS-side Intel AMT/LMS masking\n");
+    printf("      --acpi       Select ACPI table dump target (live-dump)\n");
+    printf("      --optionrom  Select PCI Option ROM dump target (live-dump)\n");
+    printf("      --spi        Select SPI flash dump target (live-dump; dangerous)\n");
+    printf("      --smram      Select SMRAM dump target (live-dump; dangerous)\n");
     printf("      --list-backups List FirmwareGuard backups with rollback command\n");
     printf("  -o, --output     Output file, or history dir for baseline-drift\n");
     printf("  -v, --verbose    Verbose output\n");
-    printf("  -b, --brief      Brief/quick output (for smm-scan)\n");
+    printf("  -b, --brief      Brief/quick output (smm-scan, uefi-integrity)\n");
     printf("  -h, --help       Show this help message\n");
     printf("\n");
     printf("Examples:\n");
@@ -124,6 +136,11 @@ void cli_print_usage(const char *prog_name) {
     printf("  %s uefi-extract -o dump.bin # Dump SPI flash\n", prog_name);
     printf("  %s cve-check \"Intel ME\" 11.8.50 # Check a component version for CVEs\n", prog_name);
     printf("  %s rootkit-scan dump.bin   # Scan a firmware image for rootkits\n", prog_name);
+    printf("  %s uefi-integrity --json   # UEFI runtime integrity scan\n", prog_name);
+    printf("  %s coreboot-check          # Coreboot readiness advisory\n", prog_name);
+    printf("  %s ghidra-analyze dump.bin -o ghidra_analysis\n", prog_name);
+    printf("  %s live-dump               # Safe dry-run capability check\n", prog_name);
+    printf("  %s live-dump --acpi -o dumps\n", prog_name);
     printf("\n");
     printf("Note: Most operations require root privileges.\n");
     printf("\n");

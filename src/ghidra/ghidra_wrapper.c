@@ -5,18 +5,20 @@
  */
 
 #include "ghidra_wrapper.h"
-#include "../cJSON.h"
+#include "../../include/cJSON.h"
 #include "../../include/firmwareguard.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <dirent.h>
 #include <time.h>
 #include <errno.h>
+#include <signal.h>
 
 /* Default paths */
 #define DEFAULT_OUTPUT_DIR "/var/lib/firmwareguard/ghidra_analysis"
@@ -43,6 +45,43 @@ static int run_ghidra_script(const char *firmware_path, const char *script,
 static int parse_json_results(const char *json_path, ghidra_result_t *result);
 static ghidra_severity_t parse_severity(const char *severity_str);
 static bool validate_script_name(const char *script);
+static int wait_with_timeout(pid_t pid, int timeout_seconds);
+
+static int wait_with_timeout(pid_t pid, int timeout_seconds)
+{
+    int status = 0;
+    int waited = 0;
+
+    if (timeout_seconds <= 0) {
+        timeout_seconds = 300;
+    }
+
+    while (true) {
+        pid_t ret = waitpid(pid, &status, WNOHANG);
+        if (ret == pid) {
+            return (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
+        }
+        if (ret < 0) {
+            return -1;
+        }
+
+        if (waited >= timeout_seconds) {
+            kill(-pid, SIGTERM);
+            kill(pid, SIGTERM);
+            sleep(1);
+            if (waitpid(pid, &status, WNOHANG) == 0) {
+                kill(-pid, SIGKILL);
+                kill(pid, SIGKILL);
+            }
+            waitpid(pid, &status, 0);
+            FG_LOG_ERROR("Ghidra analysis timed out after %d seconds", timeout_seconds);
+            return -1;
+        }
+
+        sleep(1);
+        waited++;
+    }
+}
 
 /*
  * Validate script name to prevent path traversal attacks
@@ -119,9 +158,6 @@ int ghidra_init(ghidra_config_t *config)
     }
 
     strncpy(g_ghidra_home, g_config.ghidra_home, sizeof(g_ghidra_home) - 1);
-
-    /* Create output directory if it doesn't exist */
-    mkdir(g_config.output_dir, 0755);
 
     g_initialized = true;
     return FG_SUCCESS;
@@ -249,6 +285,12 @@ int ghidra_analyze(const char *firmware_path,
         return FG_ERROR;
     }
 
+    if (mkdir(g_config.output_dir, 0755) != 0 && errno != EEXIST) {
+        snprintf(result->error_message, sizeof(result->error_message),
+                "Cannot create output directory: %s", g_config.output_dir);
+        return FG_ERROR;
+    }
+
     /* Select appropriate script based on type */
     const char *script;
     switch (type) {
@@ -305,6 +347,18 @@ int ghidra_analyze_with_script(const char *firmware_path,
         return FG_NOT_FOUND;
     }
 
+    if (access(firmware_path, R_OK) != 0) {
+        snprintf(result->error_message, sizeof(result->error_message),
+                "Cannot read firmware file: %s", firmware_path);
+        return FG_ERROR;
+    }
+
+    if (mkdir(g_config.output_dir, 0755) != 0 && errno != EEXIST) {
+        snprintf(result->error_message, sizeof(result->error_message),
+                "Cannot create output directory: %s", g_config.output_dir);
+        return FG_ERROR;
+    }
+
     char result_path[512];
     int ret = run_ghidra_script(firmware_path, script_name, g_config.output_dir, result_path);
 
@@ -329,10 +383,11 @@ static int run_ghidra_script(const char *firmware_path, const char *script,
                             const char *output_dir, char *result_path)
 {
     result_path[0] = '\0';
+    time_t run_start = time(NULL);
 
     /* Validate script name to prevent path traversal attacks */
     if (!validate_script_name(script)) {
-        FG_ERROR("Invalid script name rejected: %s", script);
+        FG_LOG_ERROR("Invalid script name rejected: %s", script);
         return -1;
     }
 
@@ -355,13 +410,22 @@ static int run_ghidra_script(const char *firmware_path, const char *script,
 
         pid_t pid = fork();
         if (pid == 0) {
+            setpgid(0, 0);
             /* Child process */
+            char firmware_arg[512];
+            char output_arg[512];
+            if (strlen(firmware_path) >= sizeof(firmware_arg) ||
+                strlen(output_dir) >= sizeof(output_arg)) {
+                _exit(127);
+            }
+            memcpy(firmware_arg, firmware_path, strlen(firmware_path) + 1);
+            memcpy(output_arg, output_dir, strlen(output_dir) + 1);
             char *args[] = {
-                (char *)analyze_path,
-                (char *)output_dir,
+                analyze_path,
+                output_arg,
                 project_name,
-                "-import", (char *)firmware_path,
-                "-postScript", (char *)script_path,
+                "-import", firmware_arg,
+                "-postScript", script_path,
                 "-deleteProject",
                 NULL
             };
@@ -375,10 +439,7 @@ static int run_ghidra_script(const char *firmware_path, const char *script,
             execv(analyze_path, args);
             _exit(127);
         } else if (pid > 0) {
-            int status;
-            waitpid(pid, &status, 0);
-
-            if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+            if (wait_with_timeout(pid, g_config.timeout_seconds) == 0) {
                 /* Find most recent JSON result */
                 DIR *dir = opendir(output_dir);
                 if (dir) {
@@ -391,10 +452,10 @@ static int run_ghidra_script(const char *firmware_path, const char *script,
                             snprintf(full_path, sizeof(full_path), "%s/%s", output_dir, entry->d_name);
 
                             struct stat st;
-                            if (stat(full_path, &st) == 0) {
+                            if (stat(full_path, &st) == 0 && st.st_mtime >= run_start) {
                                 if (st.st_mtime > newest_time) {
                                     newest_time = st.st_mtime;
-                                    strncpy(result_path, full_path, 511);
+                                    snprintf(result_path, 512, "%s", full_path);
                                 }
                             }
                         }
@@ -418,12 +479,21 @@ static int run_ghidra_script(const char *firmware_path, const char *script,
 
     pid_t pid = fork();
     if (pid == 0) {
+        setpgid(0, 0);
+        char firmware_arg[512];
+        char output_arg[512];
+        if (strlen(firmware_path) >= sizeof(firmware_arg) ||
+            strlen(output_dir) >= sizeof(output_arg)) {
+            _exit(127);
+        }
+        memcpy(firmware_arg, firmware_path, strlen(firmware_path) + 1);
+        memcpy(output_arg, output_dir, strlen(output_dir) + 1);
         char *args[] = {
-            (char *)runner_path,
+            runner_path,
             "-t", type_arg,
-            "-o", (char *)output_dir,
-            "-g", (char *)g_ghidra_home,
-            (char *)firmware_path,
+            "-o", output_arg,
+            "-g", g_ghidra_home,
+            firmware_arg,
             NULL
         };
 
@@ -435,10 +505,7 @@ static int run_ghidra_script(const char *firmware_path, const char *script,
         execv(runner_path, args);
         _exit(127);
     } else if (pid > 0) {
-        int status;
-        waitpid(pid, &status, 0);
-
-        if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+        if (wait_with_timeout(pid, g_config.timeout_seconds) == 0) {
             /* Find result file */
             DIR *dir = opendir(output_dir);
             if (dir) {
@@ -451,9 +518,10 @@ static int run_ghidra_script(const char *firmware_path, const char *script,
                         snprintf(full_path, sizeof(full_path), "%s/%s", output_dir, entry->d_name);
 
                         struct stat st;
-                        if (stat(full_path, &st) == 0 && st.st_mtime > newest_time) {
+                        if (stat(full_path, &st) == 0 && st.st_mtime >= run_start &&
+                            st.st_mtime > newest_time) {
                             newest_time = st.st_mtime;
-                            strncpy(result_path, full_path, 511);
+                            snprintf(result_path, 512, "%s", full_path);
                         }
                     }
                 }

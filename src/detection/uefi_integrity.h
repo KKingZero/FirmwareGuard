@@ -162,6 +162,9 @@ typedef struct {
 /* Initialize UEFI integrity checking subsystem */
 int uefi_integrity_init(void);
 
+/* Initialize read-only state needed by sysfs-only scans */
+int uefi_integrity_init_readonly(void);
+
 /* Cleanup UEFI integrity subsystem */
 void uefi_integrity_cleanup(void);
 

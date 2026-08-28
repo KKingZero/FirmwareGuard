@@ -131,6 +131,54 @@ This shows comprehensive steps to disable all detected components.
 
 ---
 
+## Graduated Analysis Commands
+
+### UEFI Runtime Integrity
+
+```bash
+sudo firmwareguard uefi-integrity
+firmwareguard uefi-integrity --brief --json
+firmwareguard uefi-integrity --json -o uefi-integrity.json
+```
+
+This command reads EFI runtime sysfs state and reports integrity risk. It does
+not write UEFI variables or firmware.
+
+### Coreboot/Libreboot Readiness
+
+```bash
+firmwareguard coreboot-check
+firmwareguard coreboot-check --json
+```
+
+The command loads `data/coreboot_boards.json` by default. Set `FG_DATA_DIR` when
+running from an installed data directory or a test fixture directory.
+
+### Local Ghidra Analysis
+
+```bash
+firmwareguard ghidra-analyze firmware.bin
+firmwareguard ghidra-analyze firmware.bin --json -o ghidra_analysis
+```
+
+Ghidra must be local. Set `GHIDRA_HOME` or install it in a common system path.
+Missing Ghidra is reported as unavailable, not as a crash.
+
+### Live Dump Safety
+
+```bash
+firmwareguard live-dump
+sudo firmwareguard live-dump --acpi -o dumps
+sudo firmwareguard live-dump --spi --dangerous --yes -o dumps
+sudo firmwareguard live-dump --smram --dangerous -o dumps
+```
+
+`live-dump` is a capability/risk dry-run unless a target flag is selected. SPI
+and SMRAM dumps require `--dangerous`, root, and confirmation unless `--yes` is
+supplied. Unsupported hardware or missing tools are reported cleanly.
+
+---
+
 ## Phase 3 Security Features (NEW!)
 
 ### 5. Secure Boot Detection

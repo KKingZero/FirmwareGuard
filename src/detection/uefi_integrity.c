@@ -16,6 +16,15 @@ static void add_finding(uefi_integrity_result_t *result, const char *finding);
 static int read_sysfs_uint64(const char *path, uint64_t *value);
 static int read_sysfs_uint32(const char *path, uint32_t *value);
 static void sha256_hash(const uint8_t *data, size_t len, uint8_t *hash);
+static void uefi_integrity_init_state(void);
+
+static void uefi_integrity_init_state(void) {
+    memset(&g_uefi_state, 0, sizeof(g_uefi_state));
+    uefi_init_hook_signatures(g_uefi_state.signatures, &g_uefi_state.num_signatures);
+    snprintf(g_uefi_state.baseline_path, sizeof(g_uefi_state.baseline_path),
+             "/var/lib/firmwareguard/uefi_baseline.dat");
+    g_uefi_state.initialized = true;
+}
 
 int uefi_integrity_init(void) {
     FG_INFO("Initializing UEFI integrity checking subsystem...");
@@ -30,23 +39,22 @@ int uefi_integrity_init(void) {
     struct stat st;
     if (stat(UEFI_RUNTIME_PATH, &st) != 0) {
         FG_WARN("EFI runtime services not available - system may not be UEFI-based");
-        memset(&g_uefi_state, 0, sizeof(g_uefi_state));
-        g_uefi_state.initialized = true;
+        uefi_integrity_init_state();
         return FG_NOT_SUPPORTED;
     }
 
-    memset(&g_uefi_state, 0, sizeof(g_uefi_state));
-
-    /* Initialize hook detection signatures */
-    uefi_init_hook_signatures(g_uefi_state.signatures, &g_uefi_state.num_signatures);
-
-    /* Set baseline path */
-    snprintf(g_uefi_state.baseline_path, sizeof(g_uefi_state.baseline_path),
-             "/var/lib/firmwareguard/uefi_baseline.dat");
-
-    g_uefi_state.initialized = true;
+    uefi_integrity_init_state();
     FG_INFO("UEFI integrity subsystem initialized");
 
+    return FG_SUCCESS;
+}
+
+int uefi_integrity_init_readonly(void) {
+    if (g_uefi_state.initialized) {
+        return FG_SUCCESS;
+    }
+
+    uefi_integrity_init_state();
     return FG_SUCCESS;
 }
 
@@ -693,6 +701,8 @@ int uefi_integrity_scan(uefi_integrity_result_t *result) {
         return FG_ERROR;
     }
 
+    uefi_integrity_init_readonly();
+
     memset(result, 0, sizeof(uefi_integrity_result_t));
     result->scan_time = time(NULL);
 
@@ -851,6 +861,8 @@ int uefi_integrity_check_brief(uefi_integrity_result_t *result) {
     if (!result) {
         return FG_ERROR;
     }
+
+    uefi_integrity_init_readonly();
 
     memset(result, 0, sizeof(uefi_integrity_result_t));
     result->scan_time = time(NULL);

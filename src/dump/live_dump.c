@@ -16,9 +16,10 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
+#include <sys/wait.h>
 #include <errno.h>
 #include <time.h>
-#include <openssl/sha.h>
+#include <openssl/evp.h>
 
 /* Paths */
 #define ACPI_TABLES_PATH "/sys/firmware/acpi/tables"
@@ -34,6 +35,53 @@ static uint32_t g_capabilities = 0;
 static void compute_file_sha256(const char *path, char *hash_out);
 static int copy_file(const char *src, const char *dst);
 static int run_flashrom(const char *output, const char *region);
+static bool resolve_trusted_command(const char *name, char *out, size_t out_size);
+static bool valid_flashrom_region(const char *region);
+
+static bool resolve_trusted_command(const char *name, char *out, size_t out_size)
+{
+    static const char *trusted_dirs[] = {
+        "/usr/sbin", "/usr/bin", "/usr/local/sbin", "/usr/local/bin", "/sbin", "/bin", NULL
+    };
+
+    if (!name || strchr(name, '/')) {
+        return false;
+    }
+
+    for (int i = 0; trusted_dirs[i]; i++) {
+        char candidate[512];
+        if (snprintf(candidate, sizeof(candidate), "%s/%s", trusted_dirs[i], name) >=
+            (int)sizeof(candidate)) {
+            continue;
+        }
+        if (access(candidate, X_OK) == 0) {
+            if (strlen(candidate) >= out_size) {
+                return false;
+            }
+            memcpy(out, candidate, strlen(candidate) + 1);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool valid_flashrom_region(const char *region)
+{
+    static const char *allowed[] = { "all", "bios", "me", "gbe", "pd", "ec", NULL };
+
+    if (!region || strcmp(region, "all") == 0) {
+        return true;
+    }
+
+    for (int i = 0; allowed[i]; i++) {
+        if (strcmp(region, allowed[i]) == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 /*
  * Initialize
@@ -69,7 +117,8 @@ int dump_init(void)
     }
 
     /* flashrom for SPI */
-    if (system("which flashrom > /dev/null 2>&1") == 0) {
+    char flashrom_path[512];
+    if (resolve_trusted_command("flashrom", flashrom_path, sizeof(flashrom_path))) {
         g_capabilities |= (1 << DUMP_REGION_SPI_FLASH);
     }
 
@@ -144,24 +193,39 @@ static void compute_file_sha256(const char *path, char *hash_out)
     FILE *fp = fopen(path, "rb");
     if (!fp) return;
 
-    SHA256_CTX ctx;
-    SHA256_Init(&ctx);
+    EVP_MD_CTX *ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        fclose(fp);
+        return;
+    }
+
+    if (EVP_DigestInit_ex(ctx, EVP_sha256(), NULL) != 1) {
+        EVP_MD_CTX_free(ctx);
+        fclose(fp);
+        return;
+    }
 
     unsigned char buffer[8192];
     size_t bytes;
 
     while ((bytes = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
-        SHA256_Update(&ctx, buffer, bytes);
+        EVP_DigestUpdate(ctx, buffer, bytes);
     }
 
     fclose(fp);
 
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256_Final(hash, &ctx);
-
-    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
-        sprintf(hash_out + (i * 2), "%02x", hash[i]);
+    unsigned char hash[EVP_MAX_MD_SIZE];
+    unsigned int hash_len = 0;
+    if (EVP_DigestFinal_ex(ctx, hash, &hash_len) != 1 || hash_len < 32) {
+        EVP_MD_CTX_free(ctx);
+        return;
     }
+    EVP_MD_CTX_free(ctx);
+
+    for (unsigned int i = 0; i < 32; i++) {
+        snprintf(hash_out + (i * 2), 3, "%02x", hash[i]);
+    }
+    hash_out[64] = '\0';
 }
 
 /*
@@ -196,19 +260,55 @@ static int copy_file(const char *src, const char *dst)
  */
 static int run_flashrom(const char *output, const char *region)
 {
-    char cmd[1024];
-
-    if (region && strcmp(region, "all") != 0) {
-        snprintf(cmd, sizeof(cmd),
-                "flashrom -p internal --ifd -i %s -r %s 2>&1",
-                region, output);
-    } else {
-        snprintf(cmd, sizeof(cmd),
-                "flashrom -p internal -r %s 2>&1",
-                output);
+    if (!output || !valid_flashrom_region(region)) {
+        return -1;
     }
 
-    return system(cmd);
+    char output_arg[512];
+    if (strlen(output) >= sizeof(output_arg)) {
+        return -1;
+    }
+    memcpy(output_arg, output, strlen(output) + 1);
+
+    char flashrom_path[512];
+    if (!resolve_trusted_command("flashrom", flashrom_path, sizeof(flashrom_path))) {
+        return -1;
+    }
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            close(devnull);
+        }
+
+        if (region && strcmp(region, "all") != 0) {
+            char include_arg[64];
+            snprintf(include_arg, sizeof(include_arg), "%s", region);
+            execv(flashrom_path, (char *const[]) {
+                flashrom_path, "-p", "internal", "--ifd", "-i", include_arg,
+                "-r", output_arg, NULL
+            });
+        } else {
+            execv(flashrom_path, (char *const[]) {
+                flashrom_path, "-p", "internal", "-r", output_arg, NULL
+            });
+        }
+        _exit(127);
+    }
+
+    if (pid < 0) {
+        return -1;
+    }
+
+    int status = 0;
+    if (waitpid(pid, &status, 0) < 0) {
+        return -1;
+    }
+
+    return (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
 }
 
 /*
@@ -228,7 +328,12 @@ int dump_acpi_tables(const char *output_dir, region_dump_t *result)
 
     /* Create output directory */
     char acpi_dir[600];
-    snprintf(acpi_dir, sizeof(acpi_dir), "%s/acpi", output_dir);
+    if (snprintf(acpi_dir, sizeof(acpi_dir), "%s/acpi", output_dir) >=
+        (int)sizeof(result->output_path)) {
+        result->status = DUMP_STATUS_FAILED;
+        strncpy(result->error, "Output path too long", sizeof(result->error) - 1);
+        return FG_ERROR;
+    }
     mkdir(acpi_dir, 0755);
 
     DIR *dir = opendir(ACPI_TABLES_PATH);
@@ -247,8 +352,13 @@ int dump_acpi_tables(const char *output_dir, region_dump_t *result)
 
         char src_path[768];
         char dst_path[768];
-        snprintf(src_path, sizeof(src_path), "%s/%s", ACPI_TABLES_PATH, entry->d_name);
-        snprintf(dst_path, sizeof(dst_path), "%s/%s", acpi_dir, entry->d_name);
+        if (snprintf(src_path, sizeof(src_path), "%s/%s", ACPI_TABLES_PATH, entry->d_name) >=
+            (int)sizeof(src_path) ||
+            snprintf(dst_path, sizeof(dst_path), "%s/%s", acpi_dir, entry->d_name) >=
+            (int)sizeof(dst_path)) {
+            FG_WARN("Skipping ACPI table with overlong path: %s", entry->d_name);
+            continue;
+        }
 
         struct stat st;
         if (stat(src_path, &st) == 0 && S_ISREG(st.st_mode)) {
@@ -261,7 +371,8 @@ int dump_acpi_tables(const char *output_dir, region_dump_t *result)
 
     closedir(dir);
 
-    strncpy(result->output_path, acpi_dir, sizeof(result->output_path));
+    size_t acpi_len = strlen(acpi_dir);
+    memcpy(result->output_path, acpi_dir, acpi_len + 1);
     result->size = total_size;
     strncpy(result->method_used, "sysfs copy", sizeof(result->method_used));
 
@@ -332,8 +443,17 @@ int dump_option_roms(const char *output_dir, region_dump_t **results, int *count
         if (!fp) continue;
 
         char output_path[768];
-        snprintf(output_path, sizeof(output_path), "%s/%s.rom",
-                rom_dir, entry->d_name);
+        if (snprintf(output_path, sizeof(output_path), "%s/%s.rom",
+                     rom_dir, entry->d_name) >= (int)sizeof((*results)[0].output_path)) {
+            FG_WARN("Skipping Option ROM with overlong path: %s", entry->d_name);
+            fclose(fp);
+            fp = fopen(rom_path, "w");
+            if (fp) {
+                fprintf(fp, "0");
+                fclose(fp);
+            }
+            continue;
+        }
 
         FILE *out = fopen(output_path, "wb");
         if (!out) {
@@ -362,7 +482,8 @@ int dump_option_roms(const char *output_dir, region_dump_t **results, int *count
         region_dump_t *result = &(*results)[*count];
         result->region = DUMP_REGION_OPTIONROM;
         result->status = DUMP_STATUS_SUCCESS;
-        strncpy(result->output_path, output_path, sizeof(result->output_path));
+        size_t output_len = strlen(output_path);
+        memcpy(result->output_path, output_path, output_len + 1);
         result->size = total;
         result->dump_time = time(NULL);
         strncpy(result->method_used, "sysfs rom", sizeof(result->method_used));
@@ -389,6 +510,7 @@ int dump_option_roms(const char *output_dir, region_dump_t **results, int *count
  */
 int dump_me_memory(const char *output_path, region_dump_t *result)
 {
+    (void)output_path;
     memset(result, 0, sizeof(region_dump_t));
     result->region = DUMP_REGION_ME;
     result->dump_time = time(NULL);
@@ -422,6 +544,7 @@ int dump_me_memory(const char *output_path, region_dump_t *result)
  */
 int dump_smram(const char *output_path, dump_safety_t safety, region_dump_t *result)
 {
+    (void)output_path;
     memset(result, 0, sizeof(region_dump_t));
     result->region = DUMP_REGION_SMRAM;
     result->dump_time = time(NULL);
@@ -492,7 +615,8 @@ int dump_spi_flash(const char *output_path, const char *region, region_dump_t *r
     }
 
     /* Check flashrom */
-    if (system("which flashrom > /dev/null 2>&1") != 0) {
+    char flashrom_path[512];
+    if (!resolve_trusted_command("flashrom", flashrom_path, sizeof(flashrom_path))) {
         result->status = DUMP_STATUS_NOT_SUPPORTED;
         strncpy(result->error, "flashrom not installed", sizeof(result->error));
         return FG_NOT_SUPPORTED;
@@ -505,7 +629,7 @@ int dump_spi_flash(const char *output_path, const char *region, region_dump_t *r
 
     if (ret == 0) {
         result->status = DUMP_STATUS_SUCCESS;
-        strncpy(result->output_path, output_path, sizeof(result->output_path));
+        snprintf(result->output_path, sizeof(result->output_path), "%s", output_path);
 
         struct stat st;
         if (stat(output_path, &st) == 0) {
@@ -524,6 +648,30 @@ int dump_spi_flash(const char *output_path, const char *region, region_dump_t *r
     return ret == 0 ? FG_SUCCESS : FG_ERROR;
 }
 
+int dump_psp_memory(const char *output_path, region_dump_t *result)
+{
+    (void)output_path;
+    memset(result, 0, sizeof(region_dump_t));
+    result->region = DUMP_REGION_PSP;
+    result->dump_time = time(NULL);
+    result->status = DUMP_STATUS_NOT_SUPPORTED;
+    strncpy(result->error, "AMD PSP memory dump is not supported from userspace",
+            sizeof(result->error) - 1);
+    return FG_NOT_SUPPORTED;
+}
+
+int dump_uefi_runtime(const char *output_path, region_dump_t *result)
+{
+    (void)output_path;
+    memset(result, 0, sizeof(region_dump_t));
+    result->region = DUMP_REGION_UEFI_RT;
+    result->dump_time = time(NULL);
+    result->status = DUMP_STATUS_NOT_SUPPORTED;
+    strncpy(result->error, "UEFI runtime memory dump requires kernel cooperation and is not wired",
+            sizeof(result->error) - 1);
+    return FG_NOT_SUPPORTED;
+}
+
 /*
  * Run dump session
  */
@@ -540,7 +688,7 @@ int dump_session(const dump_options_t *opts, dump_session_t *session)
 
     memset(session, 0, sizeof(dump_session_t));
     session->session_start = time(NULL);
-    strncpy(session->output_dir, opts->output_dir, sizeof(session->output_dir));
+    snprintf(session->output_dir, sizeof(session->output_dir), "%s", opts->output_dir);
 
     /* Create output directory */
     mkdir(opts->output_dir, 0755);
@@ -561,48 +709,72 @@ int dump_session(const dump_options_t *opts, dump_session_t *session)
         return FG_SUCCESS;
     }
 
+    int overall = FG_SUCCESS;
+
     /* Dump each requested region */
     if (opts->dump_acpi) {
         region_dump_t *result = &session->regions[session->num_regions++];
-        dump_acpi_tables(opts->output_dir, result);
+        int ret = dump_acpi_tables(opts->output_dir, result);
+        if (ret != FG_SUCCESS && result->status != DUMP_STATUS_NOT_SUPPORTED) {
+            overall = FG_ERROR;
+        }
     }
 
     if (opts->dump_optionrom) {
         region_dump_t *roms = NULL;
         int rom_count = 0;
-        dump_option_roms(opts->output_dir, &roms, &rom_count);
+        int ret = dump_option_roms(opts->output_dir, &roms, &rom_count);
 
         if (rom_count > 0 && roms) {
             /* Just record first one in session, count shows total */
             memcpy(&session->regions[session->num_regions++], &roms[0], sizeof(region_dump_t));
-            free(roms);
+        } else if (ret != FG_SUCCESS && session->num_regions < DUMP_REGION_MAX) {
+            region_dump_t *result = &session->regions[session->num_regions++];
+            memset(result, 0, sizeof(*result));
+            result->region = DUMP_REGION_OPTIONROM;
+            result->dump_time = time(NULL);
+            result->status = (ret == FG_NO_PERMISSION) ?
+                             DUMP_STATUS_NO_PERMISSION : DUMP_STATUS_FAILED;
+            snprintf(result->error, sizeof(result->error),
+                     "%s", ret == FG_NO_PERMISSION ? "Requires root" : "Option ROM dump failed");
+            overall = FG_ERROR;
         }
+        free(roms);
     }
 
     if (opts->dump_me) {
         char path[768];
         snprintf(path, sizeof(path), "%s/me_dump.bin", opts->output_dir);
         region_dump_t *result = &session->regions[session->num_regions++];
-        dump_me_memory(path, result);
+        int ret = dump_me_memory(path, result);
+        if (ret != FG_SUCCESS && result->status != DUMP_STATUS_NOT_SUPPORTED) {
+            overall = FG_ERROR;
+        }
     }
 
     if (opts->dump_smram) {
         char path[768];
         snprintf(path, sizeof(path), "%s/smram_dump.bin", opts->output_dir);
         region_dump_t *result = &session->regions[session->num_regions++];
-        dump_smram(path, opts->safety_level, result);
+        int ret = dump_smram(path, opts->safety_level, result);
+        if (ret != FG_SUCCESS && result->status != DUMP_STATUS_NOT_SUPPORTED) {
+            overall = FG_ERROR;
+        }
     }
 
     if (opts->dump_spi) {
         char path[768];
         snprintf(path, sizeof(path), "%s/spi_flash.bin", opts->output_dir);
         region_dump_t *result = &session->regions[session->num_regions++];
-        dump_spi_flash(path, "all", result);
+        int ret = dump_spi_flash(path, "all", result);
+        if (ret != FG_SUCCESS && result->status != DUMP_STATUS_NOT_SUPPORTED) {
+            overall = FG_ERROR;
+        }
     }
 
     session->session_end = time(NULL);
 
-    return FG_SUCCESS;
+    return overall;
 }
 
 /*
@@ -657,6 +829,30 @@ const char *dump_status_string(dump_status_t status)
         case DUMP_STATUS_UNSAFE_ABORT: return "UNSAFE_ABORT";
         default: return "UNKNOWN";
     }
+}
+
+int dump_verify(const char *dump_path, const char *expected_sha256, char *computed_sha256)
+{
+    char hash[65];
+
+    if (!dump_path) {
+        return FG_ERROR;
+    }
+
+    compute_file_sha256(dump_path, hash);
+    if (hash[0] == '\0') {
+        return FG_ERROR;
+    }
+
+    if (computed_sha256) {
+        memcpy(computed_sha256, hash, sizeof(hash));
+    }
+
+    if (expected_sha256 && *expected_sha256) {
+        return strcmp(hash, expected_sha256) == 0 ? FG_SUCCESS : 1;
+    }
+
+    return FG_SUCCESS;
 }
 
 /*

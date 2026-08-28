@@ -32,6 +32,10 @@ typedef struct {
     bool wol;              /* --wol */
     bool no_wol;           /* --no-wol */
     bool amt;              /* --amt */
+    bool acpi;             /* --acpi */
+    bool optionrom;        /* --optionrom */
+    bool spi;              /* --spi */
+    bool smram;            /* --smram */
     const char *output_file; /* -o/--output (also baseline file / history dir) */
     report_format_t report_fmt; /* resolved scan/block report format */
 } cli_opts_t;
@@ -99,5 +103,11 @@ int cmd_rootkit_scan(int argc, char **argv, const cli_opts_t *o);
 int cmd_integrity_verify(int argc, char **argv, const cli_opts_t *o);
 int cmd_heci_monitor(int argc, char **argv, const cli_opts_t *o);
 int cmd_spi_status(int argc, char **argv, const cli_opts_t *o);
+
+/* ---- Handlers: graduated advisory / analysis modules (cli_research.c) ---- */
+int cmd_uefi_integrity(int argc, char **argv, const cli_opts_t *o);
+int cmd_coreboot_check(int argc, char **argv, const cli_opts_t *o);
+int cmd_ghidra_analyze(int argc, char **argv, const cli_opts_t *o);
+int cmd_live_dump(int argc, char **argv, const cli_opts_t *o);
 
 #endif /* FG_CLI_H */
